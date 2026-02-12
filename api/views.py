@@ -74,6 +74,12 @@ class PushEndpoint(APIView):
                                     row_data['last_name'] = name_parts[1]
                                 else:
                                     row_data['last_name'] = ''
+                            
+                            # Set default password for users created in Electron
+                            # Django User model requires a password field
+                            if 'password' not in row_data or not row_data.get('password'):
+                                from django.contrib.auth.hashers import make_password
+                                row_data['password'] = make_password('ChangeMe123!')
                         
                         # Filter out any fields that don't exist in the Django model
                         # Use _meta.fields to only get forward fields (avoiding reverse relation crashes)
