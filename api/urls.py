@@ -17,6 +17,11 @@ router.register(r'performance', PerformanceReviewViewSet)
 urlpatterns = [
     path('sync/push', PushEndpoint.as_view(), name='sync-push'),
     path('sync/pull', PullEndpoint.as_view(), name='sync-pull'),
+    path('health', lambda r: Response({
+        "status": "online", 
+        "version": "1.0.5",
+        "roles": [c[0] for c in User._meta.get_field('role').choices]
+    }), name='health'),
     
     # Auth
     path('auth/login', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
