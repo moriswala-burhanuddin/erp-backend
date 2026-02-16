@@ -24,7 +24,7 @@ from rest_framework.permissions import AllowAny
 def health_check(request):
     return Response({
         "status": "online",
-        "version": "1.0.6",
+        "version": "1.0.7",
         "roles": [c[0] for c in User._meta.get_field('role').choices]
     })
 
@@ -137,10 +137,21 @@ class PushEndpoint(APIView):
 
                         obj_id = cleaned_data.pop('id')
                         try:
-                            obj, created = model.objects.update_or_create(
-                                id=obj_id,
-                                defaults=cleaned_data
-                            )
+                            # Special handling for users: Reconcile by email if ID doesn't match
+                            if table == 'users' and 'email' in cleaned_data:
+                                email = cleaned_data.get('email')
+                                existing_user = User.objects.filter(email=email).first()
+                                if existing_user:
+                                    print(f"DEBUG: Found existing user by email: {email}. Updating record with id={obj_id}")
+                                    for key, value in cleaned_data.items():
+                                        setattr(existing_user, key, value)
+                                    existing_user.save()
+                                    obj, created = existing_user, False
+                                else:
+                                    obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                            else:
+                                obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                            
                             print(f"SAVED {table} {obj_id}: Created={created}, is_deleted={getattr(obj, 'is_deleted', 'N/A')}")
                             synced_ids[table].append(obj_id)
                         except Exception as row_error:

