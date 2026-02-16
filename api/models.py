@@ -36,7 +36,17 @@ class Store(models.Model):
 
 class User(AbstractUser):
     id = models.CharField(max_length=50, primary_key=True, default=generate_user_id)
-    role = models.CharField(max_length=50, choices=[('admin', 'Admin'), ('staff', 'Staff')], default='staff')
+    role = models.CharField(max_length=50, choices=[
+        ('admin', 'Admin'), 
+        ('staff', 'Staff'),
+        ('hr_manager', 'HR Manager'),
+        ('sales_manager', 'Sales Manager'),
+        ('inventory_manager', 'Inventory Manager'),
+        ('accountant', 'Accountant'),
+        ('employee', 'Employee'),
+        ('user', 'User'),
+        ('super_admin', 'Super Admin')
+    ], default='staff')
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='users', null=True, blank=True)
     avatar = models.TextField(null=True, blank=True)
     device_id = models.CharField(max_length=50, null=True, blank=True)

@@ -62,13 +62,20 @@ class PushEndpoint(APIView):
                         continue
 
                     for row in rows:
-                        # Prepare data for update_or_create
-                        row_data = {k: v for k, v in row.items() if k != 'sync_status'}
+                        # 1. Convert camelCase to snake_case for all keys
+                        row_data = {}
+                        for k, v in row.items():
+                            if k == 'sync_status': continue
+                            # Convert camelCase to snake_case
+                            snake_key = ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_')
+                            row_data[snake_key] = v
                         
-                        # COMPATIBILITY: Map 'user' back to 'staff' for Django
+                        # Prepare data for update_or_create
+                        
+                        # COMPATIBILITY: Map 'user' back to 'staff' if needed, or just let it pass
                         if table == 'users':
-                            if row_data.get('role') == 'user':
-                                row_data['role'] = 'staff'
+                            # Frontend roles now mostly match backend roles
+                            pass
                             if 'email' in row_data and not row_data.get('username'):
                                 row_data['username'] = row_data['email']
                             
