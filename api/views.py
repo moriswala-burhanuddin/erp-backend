@@ -7,8 +7,14 @@ from django.db import transaction
 from .models import (
     Store, Account, Product, Customer, Sale, Purchase, StockLog, User, 
     Quotation, Transaction, ExpenseCategory, TaxSlab, StockTransfer, 
-    PurchaseOrder, LoyaltyPoint, Commission
+    PurchaseOrder, LoyaltyPoint, Commission,
+    Employee, Attendance, Leave, Payroll, PerformanceReview
 )
+from .serializers import (
+    EmployeeSerializer, AttendanceSerializer, LeaveSerializer, 
+    PayrollSerializer, PerformanceReviewSerializer
+)
+from rest_framework import viewsets
 
 class PushEndpoint(APIView):
     permission_classes = [IsAuthenticated]
@@ -286,8 +292,28 @@ class PullEndpoint(APIView):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            print(f"PULL ERROR: {str(e)}")
             return Response({
                 "status": "error",
                 "message": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmployeeViewSet(viewsets.ModelViewSet):
+    queryset = Employee.objects.all()
+    serializer_class = EmployeeSerializer
+
+class AttendanceViewSet(viewsets.ModelViewSet):
+    queryset = Attendance.objects.all()
+    serializer_class = AttendanceSerializer
+
+class LeaveViewSet(viewsets.ModelViewSet):
+    queryset = Leave.objects.all()
+    serializer_class = LeaveSerializer
+
+class PayrollViewSet(viewsets.ModelViewSet):
+    queryset = Payroll.objects.all()
+    serializer_class = PayrollSerializer
+
+class PerformanceReviewViewSet(viewsets.ModelViewSet):
+    queryset = PerformanceReview.objects.all()
+    serializer_class = PerformanceReviewSerializer

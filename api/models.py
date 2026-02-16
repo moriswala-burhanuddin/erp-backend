@@ -215,3 +215,69 @@ class Commission(models.Model):
     status = models.CharField(max_length=50, choices=[('pending', 'Pending'), ('paid', 'Paid')], default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
 
+
+def generate_emp_id(): return generate_id('emp')
+def generate_att_id(): return generate_id('att')
+def generate_leave_id(): return generate_id('leave')
+def generate_payroll_id(): return generate_id('pay')
+def generate_perf_id(): return generate_id('perf')
+
+class Employee(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_emp_id)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='employee_profile')
+    department = models.CharField(max_length=100)
+    designation = models.CharField(max_length=100)
+    salary = models.DecimalField(max_digits=12, decimal_places=2)
+    joining_date = models.DateField()
+    documents = models.TextField(null=True, blank=True) # JSON list of document URLs
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='employees')
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class Attendance(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_att_id)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendance')
+    date = models.DateField()
+    check_in = models.TimeField(null=True, blank=True)
+    check_out = models.TimeField(null=True, blank=True)
+    status = models.CharField(max_length=50, choices=[('present', 'Present'), ('absent', 'Absent'), ('late', 'Late'), ('half_day', 'Half Day')])
+    total_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class Leave(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_leave_id)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='leaves')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    type = models.CharField(max_length=50, choices=[('sick', 'Sick Leave'), ('casual', 'Casual Leave'), ('earned', 'Earned Leave')])
+    reason = models.TextField()
+    status = models.CharField(max_length=50, choices=[('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected')], default='pending')
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class Payroll(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_payroll_id)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='payrolls')
+    month = models.DateField() # Store as first day of month
+    basic_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    deductions = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    bonus = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=50, choices=[('generated', 'Generated'), ('paid', 'Paid')], default='generated')
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class PerformanceReview(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_perf_id)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='performance_reviews')
+    month = models.DateField()
+    kpi_score = models.DecimalField(max_digits=5, decimal_places=2) # 0-100
+    rating = models.IntegerField() # 1-5
+    comments = models.TextField(null=True, blank=True)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
