@@ -70,6 +70,10 @@ class PushEndpoint(APIView):
                             snake_key = ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_')
                             row_data[snake_key] = v
                         
+                        # Debug logging
+                        if table == 'users':
+                            print(f"SYNCING USER: {row_data.get('email')} | Role: {row_data.get('role')} | Active: {row_data.get('is_active')}")
+                        
                         # Prepare data for update_or_create
                         
                         # COMPATIBILITY: Map 'user' back to 'staff' if needed, or just let it pass
@@ -88,9 +92,14 @@ class PushEndpoint(APIView):
                                 else:
                                     row_data['last_name'] = ''
                             
-                            # Set default password for users created in Electron
-                            # Django User model requires a password field
-                            if 'password' not in row_data or not row_data.get('password'):
+                            # Ensure password is hashed if provided as plain text
+                            if 'password' in row_data and row_data.get('password'):
+                                from django.contrib.auth.hashers import make_password, is_password_usable
+                                # Only hash if it doesn't look like a hashed password already (simple check)
+                                if not row_data['password'].startswith(('pbkdf2_', 'bcrypt', 'argon2')):
+                                    row_data['password'] = make_password(row_data['password'])
+                            else:
+                                # Set default password for users created in Electron
                                 from django.contrib.auth.hashers import make_password
                                 row_data['password'] = make_password('ChangeMe123!')
                         
