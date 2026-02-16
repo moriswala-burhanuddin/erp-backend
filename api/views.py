@@ -76,47 +76,52 @@ class PushEndpoint(APIView):
                         
                         # Prepare data for update_or_create
                         
-                        # COMPATIBILITY: Map 'user' back to 'staff' if needed, or just let it pass
+                        # Ensure password is hashed if provided as plain text
                         if table == 'users':
-                            # Frontend roles now mostly match backend roles
-                            pass
+                            # NEVER let password be null or empty string
+                            if not row_data.get('password'):
+                                from django.contrib.auth.hashers import make_password
+                                row_data['password'] = make_password('ChangeMe123!')
+                                print(f"DEBUG: Setting default password for {row_data.get('email')}")
+                            elif not row_data['password'].startswith(('pbkdf2_', 'bcrypt', 'argon2')):
+                                from django.contrib.auth.hashers import make_password
+                                row_data['password'] = make_password(row_data['password'])
+                                print(f"DEBUG: Hashing plain-text password for {row_data.get('email')}")
+                                
                             if 'email' in row_data and not row_data.get('username'):
                                 row_data['username'] = row_data['email']
-                            
+
+                            # Normalize roles: default to staff if invalid
+                            valid_roles = [c[0] for c in model._meta.get_field('role').choices]
+                            if row_data.get('role') not in valid_roles:
+                                print(f"DEBUG: Normalizing role '{row_data.get('role')}' to 'staff' for {row_data.get('email')}")
+                                row_data['role'] = 'staff'
+
+                            # Ensure is_active is True for synced users
+                            if 'is_active' not in row_data:
+                                row_data['is_active'] = True
+
                             # Split name into first and last name
                             if 'name' in row_data:
                                 name_parts = row_data['name'].split(' ', 1)
                                 row_data['first_name'] = name_parts[0]
-                                if len(name_parts) > 1:
-                                    row_data['last_name'] = name_parts[1]
-                                else:
-                                    row_data['last_name'] = ''
-                            
-                            # Ensure password is hashed if provided as plain text
-                            if 'password' in row_data and row_data.get('password'):
-                                from django.contrib.auth.hashers import make_password, is_password_usable
-                                # Only hash if it doesn't look like a hashed password already (simple check)
-                                if not row_data['password'].startswith(('pbkdf2_', 'bcrypt', 'argon2')):
-                                    row_data['password'] = make_password(row_data['password'])
-                            else:
-                                # Set default password for users created in Electron
-                                from django.contrib.auth.hashers import make_password
-                                row_data['password'] = make_password('ChangeMe123!')
-                        
+                                row_data['last_name'] = name_parts[1] if len(name_parts) > 1 else ''
+
                         # Filter out any fields that don't exist in the Django model
-                        # Use _meta.fields to only get forward fields (avoiding reverse relation crashes)
-                        valid_fields = {f.name for f in model._meta.fields}
-                        # Also allow _id fields for ForeignKeys
-                        valid_fields.update({f.attname for f in model._meta.fields})
+                        valid_fields = {f.name for f in model._meta.get_fields() if not (f.is_relation and not f.concrete)}
+                        # Also allow attnames (like store_id)
+                        valid_fields.update({getattr(f, 'attname', None) for f in model._meta.get_fields()})
                         
-                        cleaned_data = {k: v for k, v in row_data.items() if k in valid_fields}
+                        cleaned_data = {k: v for k, v in row_data.items() if k in valid_fields and v is not None}
                         
-                        if not cleaned_data:
-                            print(f"SKIPPING {table} row {row.get('id')} - No valid fields! Row keys: {list(row.items())}")
-                            continue
-                        
-                        # Debug: Print what we are about to save
-                        # print(f"SAVING {table}: {cleaned_data.keys()}")
+                        # Debug: Print what we are about to save for users specifically
+                        if table == 'users':
+                            print(f"DEBUG: Cleaned User Data for {cleaned_data.get('email')}: {list(cleaned_data.keys())}")
+                            if 'password' not in cleaned_data or cleaned_data.get('password') is None:
+                                print(f"CRITICAL: PASSWORD STILL MISSING FOR {cleaned_data.get('email')}!")
+                                # One last fallback to avoid 400
+                                from django.contrib.auth.hashers import make_password
+                                cleaned_data['password'] = make_password('ChangeMe123!')
 
                         obj_id = cleaned_data.pop('id')
                         try:
