@@ -16,6 +16,18 @@ from .serializers import (
 )
 from rest_framework import viewsets
 
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def health_check(request):
+    return Response({
+        "status": "online",
+        "version": "1.0.6",
+        "roles": [c[0] for c in User._meta.get_field('role').choices]
+    })
+
 class PushEndpoint(APIView):
     permission_classes = [IsAuthenticated]
 

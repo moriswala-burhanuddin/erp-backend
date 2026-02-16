@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 from .views import (
     PushEndpoint, PullEndpoint, EmployeeViewSet, AttendanceViewSet, 
-    LeaveViewSet, PayrollViewSet, PerformanceReviewViewSet
+    LeaveViewSet, PayrollViewSet, PerformanceReviewViewSet, health_check
 )
 from .serializers import CustomTokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -17,11 +17,7 @@ router.register(r'performance', PerformanceReviewViewSet)
 urlpatterns = [
     path('sync/push', PushEndpoint.as_view(), name='sync-push'),
     path('sync/pull', PullEndpoint.as_view(), name='sync-pull'),
-    path('health', lambda r: Response({
-        "status": "online", 
-        "version": "1.0.5",
-        "roles": [c[0] for c in User._meta.get_field('role').choices]
-    }), name='health'),
+    path('health', health_check, name='health'),
     
     # Auth
     path('auth/login', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
