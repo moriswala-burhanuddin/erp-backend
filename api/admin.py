@@ -114,14 +114,9 @@ class ReceivingItemInline(admin.TabularInline):
 
 @admin.register(Receiving)
 class ReceivingAdmin(admin.ModelAdmin):
-    list_display = ('receiving_number', 'supplier', 'status', 'total_amount', 'amount_paid', 'amount_due', 'store', 'updated_at')
-    list_filter = ('store', 'status')
-    search_fields = ('receiving_number', 'supplier__company_name')
+    list_display = ('id', 'receiving_number', 'status', 'updated_at')
     ordering = ('-updated_at',)
-    inlines = [ReceivingItemInline]
-    readonly_fields = ('completed_at',)
 
 @admin.register(ReceivingItem)
 class ReceivingItemAdmin(admin.ModelAdmin):
-    list_display = ('receiving', 'product_name', 'quantity', 'cost', 'total', 'batch_number')
-    search_fields = ('product_name', 'receiving__receiving_number')
+    list_display = ('id', 'product_name', 'quantity', 'cost', 'total')
