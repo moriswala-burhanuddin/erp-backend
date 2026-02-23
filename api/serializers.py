@@ -118,3 +118,19 @@ class SupplierDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SupplierDocument
         fields = '__all__'
+
+from .models import Receiving, ReceivingItem
+
+class ReceivingItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReceivingItem
+        fields = '__all__'
+
+class ReceivingSerializer(serializers.ModelSerializer):
+    items = ReceivingItemSerializer(many=True, read_only=True)
+    supplier_name = serializers.CharField(source='supplier.company_name', read_only=True)
+    purchase_order_number = serializers.CharField(source='purchase_order.id', read_only=True, allow_null=True)
+
+    class Meta:
+        model = Receiving
+        fields = '__all__'

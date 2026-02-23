@@ -10,14 +10,16 @@ from .models import (
     PurchaseOrder, LoyaltyPoint, Commission,
     Employee, Attendance, Leave, Payroll, PerformanceReview,
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
-    PaymentTerm, SupplierDocument
+    PaymentTerm, SupplierDocument,
+    Receiving, ReceivingItem
 )
 from .serializers import (
     EmployeeSerializer, AttendanceSerializer, LeaveSerializer, 
     PayrollSerializer, PerformanceReviewSerializer,
     SupplierSerializer, SupplierCustomFieldSerializer, 
     SupplierCustomFieldValueSerializer, SupplierTransactionSerializer,
-    PaymentTermSerializer, SupplierDocumentSerializer
+    PaymentTermSerializer, SupplierDocumentSerializer,
+    ReceivingSerializer, ReceivingItemSerializer
 )
 from rest_framework import viewsets
 
@@ -68,7 +70,9 @@ class PushEndpoint(APIView):
             'transactions', 
             'stock_logs',
             'loyalty_points',
-            'commissions'
+            'commissions',
+            'receivings',
+            'receiving_items',
         ]
 
         synced_ids = {table: [] for table in ORDER}
@@ -207,7 +211,9 @@ class PushEndpoint(APIView):
             'supplier_custom_values': SupplierCustomFieldValue,
             'supplier_transactions': SupplierTransaction,
             'payment_terms': PaymentTerm,
-            'supplier_documents': SupplierDocument
+            'supplier_documents': SupplierDocument,
+            'receivings': Receiving,
+            'receiving_items': ReceivingItem,
         }
         return model_mapping.get(table_name)
 
@@ -414,3 +420,143 @@ class PaymentTermViewSet(viewsets.ModelViewSet):
 class SupplierDocumentViewSet(viewsets.ModelViewSet):
     queryset = SupplierDocument.objects.all()
     serializer_class = SupplierDocumentSerializer
+
+
+# ──────────────────────────────────────────────────────────────
+# RECEIVING VIEWSETS
+# ──────────────────────────────────────────────────────────────
+
+from rest_framework.decorators import action
+from django.utils import timezone
+from decimal import Decimal
+
+class ReceivingViewSet(viewsets.ModelViewSet):
+    serializer_class = ReceivingSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        store_id = self.request.query_params.get('store_id')
+        qs = Receiving.objects.prefetch_related('items').select_related('supplier', 'account')
+        if store_id:
+            qs = qs.filter(store_id=store_id)
+        return qs.order_by('-updated_at')
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Finalize a receiving: update inventory, create ledger entry, update PO."""
+        receiving = self.get_object()
+        if receiving.status == 'completed':
+            return Response({'error': 'Already completed'}, status=400)
+
+        amount_paid = Decimal(str(request.data.get('amount_paid', 0)))
+        account_id  = request.data.get('account_id')
+
+        try:
+            with transaction.atomic():
+                for item in receiving.items.all():
+                    # 1. Increase product quantity
+                    product = item.product
+                    product.quantity += int(item.quantity)
+                    # Update purchase price to latest cost
+                    product.purchase_price = item.cost
+                    product.save()
+
+                    # 2. Create stock log
+                    StockLog.objects.create(
+                        product=product,
+                        product_name=product.name,
+                        store=receiving.store,
+                        quantity_change=item.quantity,
+                        reason='receiving',
+                        reference_id=receiving.id,
+                    )
+
+                # 3. Create supplier transaction (purchase)
+                SupplierTransaction.objects.create(
+                    supplier=receiving.supplier,
+                    type='purchase',
+                    amount=receiving.total_amount,
+                    balance_after=receiving.supplier.current_balance + receiving.total_amount,
+                    date=timezone.now(),
+                    reference_id=receiving.receiving_number,
+                    description=f'Receiving #{receiving.receiving_number}',
+                    store=receiving.store,
+                )
+
+                # 4. Update supplier balance
+                receiving.supplier.current_balance += receiving.total_amount
+                receiving.supplier.save()
+
+                # 5. Update PO status if linked and fully received
+                if receiving.purchase_order:
+                    po = receiving.purchase_order
+                    if not po.receivings.filter(status__in=['draft', 'suspended']).exists():
+                        po.status = 'received'
+                        po.save()
+
+                # 6. Mark receiving as completed
+                receiving.amount_paid = amount_paid
+                receiving.amount_due = receiving.total_amount - amount_paid
+                receiving.status = 'completed'
+                receiving.completed_at = timezone.now()
+                if account_id:
+                    receiving.account_id = account_id
+                receiving.save()
+
+            return Response(ReceivingSerializer(receiving).data)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+    @action(detail=True, methods=['post'])
+    def suspend(self, request, pk=None):
+        """Save receiving as suspended — inventory NOT updated yet."""
+        receiving = self.get_object()
+        receiving.status = 'suspended'
+        receiving.save()
+        return Response(ReceivingSerializer(receiving).data)
+
+    @action(detail=True, methods=['post'])
+    def add_payment(self, request, pk=None):
+        """Record a partial payment against a completed/suspended receiving."""
+        receiving = self.get_object()
+        amount = Decimal(str(request.data.get('amount', 0)))
+        account_id = request.data.get('account_id')
+
+        if amount <= 0:
+            return Response({'error': 'Invalid amount'}, status=400)
+
+        with transaction.atomic():
+            # Create supplier payment transaction
+            SupplierTransaction.objects.create(
+                supplier=receiving.supplier,
+                type='payment',
+                amount=amount,
+                balance_after=receiving.supplier.current_balance - amount,
+                date=timezone.now(),
+                reference_id=receiving.receiving_number,
+                description=f'Payment for #{receiving.receiving_number}',
+                store=receiving.store,
+            )
+            receiving.supplier.current_balance -= amount
+            receiving.supplier.save()
+
+            receiving.amount_paid += amount
+            receiving.amount_due = max(receiving.total_amount - receiving.amount_paid, Decimal('0'))
+            if account_id:
+                receiving.account_id = account_id
+            receiving.save()
+
+        return Response(ReceivingSerializer(receiving).data)
+
+
+class ReceivingItemViewSet(viewsets.ModelViewSet):
+    serializer_class = ReceivingItemSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        receiving_id = self.request.query_params.get('receiving_id')
+        qs = ReceivingItem.objects.all()
+        if receiving_id:
+            qs = qs.filter(receiving_id=receiving_id)
+        return qs

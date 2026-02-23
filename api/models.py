@@ -29,6 +29,8 @@ def generate_scf_id(): return generate_id('scf')
 def generate_scfv_id(): return generate_id('scfv')
 def generate_stx_id(): return generate_id('stx')
 def generate_pt_id(): return generate_id('pt')
+def generate_recv_id(): return generate_id('recv')
+def generate_ri_id(): return generate_id('ri')
 def generate_doc_id(): return generate_id('doc')
 
 
@@ -396,3 +398,58 @@ class PerformanceReview(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     device_id = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# RECEIVING MODULE
+# ─────────────────────────────────────────────────────────────
+
+class Receiving(models.Model):
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('suspended', 'Suspended'),
+        ('completed', 'Completed'),
+        ('returned', 'Returned'),
+    ]
+    id               = models.CharField(max_length=50, primary_key=True, default=generate_recv_id)
+    receiving_number = models.CharField(max_length=100, unique=True)
+    supplier         = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='receivings')
+    purchase_order   = models.ForeignKey(PurchaseOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='receivings')
+    total_amount     = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_total   = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_paid      = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_due       = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    account          = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, blank=True, related_name='receivings')
+    status           = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    notes            = models.TextField(null=True, blank=True)
+    custom_fields    = models.JSONField(null=True, blank=True)  # extra fields dict
+    store            = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='receivings')
+    device_id        = models.CharField(max_length=50, null=True, blank=True)
+    completed_at     = models.DateTimeField(null=True, blank=True)
+    updated_at       = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.receiving_number} — {self.supplier.company_name}"
+
+
+class ReceivingItem(models.Model):
+    id            = models.CharField(max_length=50, primary_key=True, default=generate_ri_id)
+    receiving     = models.ForeignKey(Receiving, on_delete=models.CASCADE, related_name='items')
+    product       = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='receiving_items')
+    product_name  = models.CharField(max_length=255)
+    cost          = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity      = models.DecimalField(max_digits=10, decimal_places=3)
+    discount_pct  = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    total         = models.DecimalField(max_digits=12, decimal_places=2)
+    batch_number  = models.CharField(max_length=100, null=True, blank=True)
+    expiry_date   = models.DateField(null=True, blank=True)
+    serial_number = models.CharField(max_length=100, null=True, blank=True)
+    location      = models.CharField(max_length=100, null=True, blank=True)
+    selling_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    upc           = models.CharField(max_length=100, null=True, blank=True)
+    description   = models.TextField(null=True, blank=True)
+    store         = models.ForeignKey(Store, on_delete=models.CASCADE)
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.product_name} × {self.quantity}"

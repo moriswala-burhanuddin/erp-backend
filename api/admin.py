@@ -4,7 +4,8 @@ from .models import (
     Store, User, Account, Product, Customer, Sale, Purchase, 
     StockLog, Quotation, Transaction, ExpenseCategory, TaxSlab, 
     StockTransfer, PurchaseOrder, LoyaltyPoint, Commission,
-    Supplier, PaymentTerm, SupplierDocument
+    Supplier, PaymentTerm, SupplierDocument,
+    Receiving, ReceivingItem
 )
 
 @admin.register(User)
@@ -102,3 +103,24 @@ class SupplierDocumentAdmin(admin.ModelAdmin):
     list_display = ('supplier', 'name', 'file_type', 'uploaded_at')
     list_filter = ('file_type',)
     search_fields = ('name', 'supplier__company_name')
+
+
+class ReceivingItemInline(admin.TabularInline):
+    model = ReceivingItem
+    extra = 0
+    fields = ('product', 'product_name', 'quantity', 'cost', 'discount_pct', 'total', 'batch_number', 'expiry_date')
+    readonly_fields = ('total',)
+
+@admin.register(Receiving)
+class ReceivingAdmin(admin.ModelAdmin):
+    list_display = ('receiving_number', 'supplier', 'status', 'total_amount', 'amount_paid', 'amount_due', 'store', 'updated_at')
+    list_filter = ('store', 'status')
+    search_fields = ('receiving_number', 'supplier__company_name')
+    ordering = ('-updated_at',)
+    inlines = [ReceivingItemInline]
+    readonly_fields = ('completed_at',)
+
+@admin.register(ReceivingItem)
+class ReceivingItemAdmin(admin.ModelAdmin):
+    list_display = ('receiving', 'product_name', 'quantity', 'cost', 'total', 'batch_number')
+    search_fields = ('product_name', 'receiving__receiving_number')
