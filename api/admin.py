@@ -3,7 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Store, User, Account, Product, Customer, Sale, Purchase, 
     StockLog, Quotation, Transaction, ExpenseCategory, TaxSlab, 
-    StockTransfer, PurchaseOrder, LoyaltyPoint, Commission
+    StockTransfer, PurchaseOrder, LoyaltyPoint, Commission,
+    Supplier, PaymentTerm, SupplierDocument
 )
 
 @admin.register(User)
@@ -82,3 +83,22 @@ class LoyaltyPointAdmin(admin.ModelAdmin):
 @admin.register(Commission)
 class CommissionAdmin(admin.ModelAdmin):
     list_display = ('user', 'sale', 'amount', 'percentage', 'status')
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ('company_name', 'supplier_code', 'email', 'phone', 'status', 'current_balance', 'store')
+    list_filter = ('store', 'status', 'is_preferred', 'is_blacklisted', 'is_deleted')
+    search_fields = ('company_name', 'email', 'phone', 'supplier_code', 'tax_number')
+    ordering = ('company_name',)
+
+@admin.register(PaymentTerm)
+class PaymentTermAdmin(admin.ModelAdmin):
+    list_display = ('name', 'days', 'store')
+    list_filter = ('store',)
+    search_fields = ('name',)
+
+@admin.register(SupplierDocument)
+class SupplierDocumentAdmin(admin.ModelAdmin):
+    list_display = ('supplier', 'name', 'file_type', 'uploaded_at')
+    list_filter = ('file_type',)
+    search_fields = ('name', 'supplier__company_name')
