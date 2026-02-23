@@ -43,6 +43,9 @@ class Store(models.Model):
     device_id = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return f"{self.name} ({self.branch})" if self.branch else self.name
+
 class User(AbstractUser):
     id = models.CharField(max_length=50, primary_key=True, default=generate_user_id)
     role = models.CharField(max_length=50, choices=[
@@ -429,7 +432,8 @@ class Receiving(models.Model):
     updated_at       = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.receiving_number} — {self.supplier.company_name}"
+        supplier_name = self.supplier.company_name if self.supplier else "No Supplier"
+        return f"{self.receiving_number} — {supplier_name}"
 
 
 class ReceivingItem(models.Model):

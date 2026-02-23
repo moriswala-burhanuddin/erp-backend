@@ -8,8 +8,6 @@ from .models import (
     Receiving, ReceivingItem
 )
 
-print("DEBUG: API Admin loading...")
-print(f"DEBUG: Receiving registered: {Receiving}")
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
