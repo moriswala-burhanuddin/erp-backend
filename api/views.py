@@ -8,11 +8,16 @@ from .models import (
     Store, Account, Product, Customer, Sale, Purchase, StockLog, User, 
     Quotation, Transaction, ExpenseCategory, TaxSlab, StockTransfer, 
     PurchaseOrder, LoyaltyPoint, Commission,
-    Employee, Attendance, Leave, Payroll, PerformanceReview
+    Employee, Attendance, Leave, Payroll, PerformanceReview,
+    Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
+    PaymentTerm, SupplierDocument
 )
 from .serializers import (
     EmployeeSerializer, AttendanceSerializer, LeaveSerializer, 
-    PayrollSerializer, PerformanceReviewSerializer
+    PayrollSerializer, PerformanceReviewSerializer,
+    SupplierSerializer, SupplierCustomFieldSerializer, 
+    SupplierCustomFieldValueSerializer, SupplierTransactionSerializer,
+    PaymentTermSerializer, SupplierDocumentSerializer
 )
 from rest_framework import viewsets
 
@@ -48,10 +53,16 @@ class PushEndpoint(APIView):
             'expense_categories',
             'tax_slabs',
             'customers', 
+            'payment_terms',
+            'suppliers',
+            'supplier_custom_fields',
+            'supplier_custom_values',
             'products', 
             'quotations',
             'sales', 
             'purchases', 
+            'supplier_transactions',
+            'supplier_documents',
             'purchase_orders',
             'stock_transfers',
             'transactions', 
@@ -190,7 +201,13 @@ class PushEndpoint(APIView):
             'stock_logs': StockLog,
             'transactions': Transaction,
             'loyalty_points': LoyaltyPoint,
-            'commissions': Commission
+            'commissions': Commission,
+            'suppliers': Supplier,
+            'supplier_custom_fields': SupplierCustomField,
+            'supplier_custom_values': SupplierCustomFieldValue,
+            'supplier_transactions': SupplierTransaction,
+            'payment_terms': PaymentTerm,
+            'supplier_documents': SupplierDocument
         }
         return model_mapping.get(table_name)
 
@@ -212,10 +229,16 @@ class PullEndpoint(APIView):
                 'users', 
                 'accounts', 
                 'customers', 
+                'payment_terms',
+                'suppliers',
+                'supplier_custom_fields',
+                'supplier_custom_values',
                 'products', 
                 'quotations',
                 'sales', 
-                'purchases', 
+                'purchases',
+                'supplier_transactions',
+                'supplier_documents', 
                 'transactions', 
                 'stock_logs'
             ]
@@ -239,7 +262,13 @@ class PullEndpoint(APIView):
                 'stock_logs': StockLog,
                 'transactions': Transaction,
                 'loyalty_points': LoyaltyPoint,
-                'commissions': Commission
+                'commissions': Commission,
+                'suppliers': Supplier,
+                'supplier_custom_fields': SupplierCustomField,
+                'supplier_custom_values': SupplierCustomFieldValue,
+                'supplier_transactions': SupplierTransaction,
+                'payment_terms': PaymentTerm,
+                'supplier_documents': SupplierDocument
             }
 
             for table in ORDER:
@@ -361,3 +390,27 @@ class PayrollViewSet(viewsets.ModelViewSet):
 class PerformanceReviewViewSet(viewsets.ModelViewSet):
     queryset = PerformanceReview.objects.all()
     serializer_class = PerformanceReviewSerializer
+
+class SupplierViewSet(viewsets.ModelViewSet):
+    queryset = Supplier.objects.all()
+    serializer_class = SupplierSerializer
+
+class SupplierCustomFieldViewSet(viewsets.ModelViewSet):
+    queryset = SupplierCustomField.objects.all()
+    serializer_class = SupplierCustomFieldSerializer
+
+class SupplierCustomFieldValueViewSet(viewsets.ModelViewSet):
+    queryset = SupplierCustomFieldValue.objects.all()
+    serializer_class = SupplierCustomFieldValueSerializer
+
+class SupplierTransactionViewSet(viewsets.ModelViewSet):
+    queryset = SupplierTransaction.objects.all()
+    serializer_class = SupplierTransactionSerializer
+
+class PaymentTermViewSet(viewsets.ModelViewSet):
+    queryset = PaymentTerm.objects.all()
+    serializer_class = PaymentTermSerializer
+
+class SupplierDocumentViewSet(viewsets.ModelViewSet):
+    queryset = SupplierDocument.objects.all()
+    serializer_class = SupplierDocumentSerializer

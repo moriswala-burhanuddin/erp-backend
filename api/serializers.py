@@ -57,7 +57,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
-from .models import Employee, Attendance, Leave, Payroll, PerformanceReview, Store, User
+from .models import (
+    Employee, Attendance, Leave, Payroll, PerformanceReview, Store, User, 
+    Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
+    PaymentTerm, SupplierDocument
+)
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -83,4 +87,34 @@ class PayrollSerializer(serializers.ModelSerializer):
 class PerformanceReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = PerformanceReview
+        fields = '__all__'
+
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = '__all__'
+
+class SupplierCustomFieldSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupplierCustomField
+        fields = '__all__'
+
+class SupplierCustomFieldValueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupplierCustomFieldValue
+        fields = '__all__'
+
+class SupplierTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupplierTransaction
+        fields = '__all__'
+
+class PaymentTermSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentTerm
+        fields = '__all__'
+
+class SupplierDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupplierDocument
         fields = '__all__'

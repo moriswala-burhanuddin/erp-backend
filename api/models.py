@@ -24,6 +24,13 @@ def generate_st_id(): return generate_id('st')
 def generate_po_id(): return generate_id('po')
 def generate_lp_id(): return generate_id('lp')
 def generate_com_id(): return generate_id('com')
+def generate_sup_id(): return generate_id('sup')
+def generate_scf_id(): return generate_id('scf')
+def generate_scfv_id(): return generate_id('scfv')
+def generate_stx_id(): return generate_id('stx')
+def generate_pt_id(): return generate_id('pt')
+def generate_doc_id(): return generate_id('doc')
+
 
 class Store(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_store_id)
@@ -115,6 +122,104 @@ class Sale(models.Model):
     quotation_id = models.CharField(max_length=50, null=True, blank=True)
     device_id = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+class Supplier(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_sup_id)
+    company_name = models.CharField(max_length=255)
+    first_name = models.CharField(max_length=255, null=True, blank=True)
+    last_name = models.CharField(max_length=255, null=True, blank=True)
+    email = models.EmailField(null=True, blank=True)
+    phone = models.CharField(max_length=50, null=True, blank=True)
+    website = models.URLField(max_length=255, null=True, blank=True)
+    
+    # Address Information
+    address_line1 = models.TextField(null=True, blank=True)
+    address_line2 = models.TextField(null=True, blank=True)
+    city = models.CharField(max_length=100, null=True, blank=True)
+    state = models.CharField(max_length=100, null=True, blank=True)
+    zip_code = models.CharField(max_length=20, null=True, blank=True)
+    country = models.CharField(max_length=100, null=True, blank=True)
+    
+    # Financial Information
+    supplier_code = models.CharField(max_length=50, unique=True, null=True, blank=True)
+    account_number = models.CharField(max_length=100, null=True, blank=True)
+    opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payment_terms = models.ForeignKey('PaymentTerm', on_delete=models.SET_NULL, null=True, blank=True, related_name='suppliers')
+    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_number = models.CharField(max_length=100, null=True, blank=True)
+    currency = models.CharField(max_length=10, default='USD')
+    current_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Internal & Meta
+    internal_notes = models.TextField(null=True, blank=True)
+    comments = models.TextField(null=True, blank=True)
+    logo = models.TextField(null=True, blank=True) # URL or Base64
+    documents = models.TextField(null=True, blank=True) # JSON list
+    status = models.CharField(max_length=50, choices=[('active', 'Active'), ('disabled', 'Disabled')], default='active')
+    rating = models.IntegerField(default=5)
+    is_preferred = models.BooleanField(default=False)
+    is_blacklisted = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='suppliers')
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.company_name
+
+class SupplierCustomField(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_scf_id)
+    name = models.CharField(max_length=255)
+    field_type = models.CharField(max_length=50, choices=[
+        ('text', 'Text'), ('number', 'Number'), ('date', 'Date'), ('dropdown', 'Dropdown')
+    ])
+    is_required = models.BooleanField(default=False)
+    show_on_receipt = models.BooleanField(default=False)
+    hide_label = models.BooleanField(default=False)
+    options = models.TextField(null=True, blank=True) # JSON for dropdown
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='supplier_custom_fields')
+    updated_at = models.DateTimeField(auto_now=True)
+
+class SupplierCustomFieldValue(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_scfv_id)
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='custom_values')
+    field = models.ForeignKey(SupplierCustomField, on_delete=models.CASCADE)
+    value = models.TextField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class PaymentTerm(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_pt_id)
+    name = models.CharField(max_length=100)
+    days = models.IntegerField(default=0)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='payment_terms')
+    updated_at = models.DateTimeField(auto_now=True)
+
+class SupplierDocument(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_doc_id)
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='supplier_documents')
+    name = models.CharField(max_length=255)
+    file_path = models.TextField() # Local or S3 path
+    file_type = models.CharField(max_length=50, null=True, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+
+class SupplierTransaction(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_stx_id)
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='transactions')
+    type = models.CharField(max_length=50, choices=[
+        ('purchase', 'Purchase'), ('payment', 'Payment'), ('credit_note', 'Credit Note'), ('opening_balance', 'Opening Balance')
+    ])
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2)
+    date = models.DateTimeField()
+    reference_id = models.CharField(max_length=100, null=True, blank=True) # Invoice # or Receipt #
+    description = models.TextField(null=True, blank=True)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
 
 class Purchase(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_pur_id)
