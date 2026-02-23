@@ -8,6 +8,9 @@ from .models import (
     Receiving, ReceivingItem
 )
 
+print("DEBUG: API Admin loading...")
+print(f"DEBUG: Receiving registered: {Receiving}")
+
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     list_display = ('email', 'first_name', 'last_name', 'role', 'store', 'is_staff')

@@ -139,7 +139,17 @@ class PushEndpoint(APIView):
                         # Also allow attnames (like store_id)
                         valid_fields.update({getattr(f, 'attname', None) for f in model._meta.get_fields()})
                         
-                        cleaned_data = {k: v for k, v in row_data.items() if k in valid_fields and v is not None}
+                        # Normalize data: filter non-existent fields and treat empty strings/None as None for certain field types
+                        cleaned_data = {}
+                        for k, v in row_data.items():
+                            if k not in valid_fields:
+                                continue
+                            
+                            # Treat empty strings as None for consistency (especially for DateFields and NULLABLE fields)
+                            if v == "" or v is None:
+                                cleaned_data[k] = None
+                            else:
+                                cleaned_data[k] = v
                         
                         # Debug: Print what we are about to save for users specifically
                         if table == 'users':
@@ -246,7 +256,9 @@ class PullEndpoint(APIView):
                 'supplier_transactions',
                 'supplier_documents', 
                 'transactions', 
-                'stock_logs'
+                'stock_logs',
+                'receivings',
+                'receiving_items'
             ]
 
             updates = {}
