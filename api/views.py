@@ -35,6 +35,17 @@ def health_check(request):
         "roles": [c[0] for c in User._meta.get_field('role').choices]
     })
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def db_diagnostic(request):
+    from django.db import connection
+    tables = connection.introspection.table_names()
+    return Response({
+        "tables": tables,
+        "has_receiving": "api_receiving" in tables,
+        "has_receivingitem": "api_receivingitem" in tables,
+    })
+
 class PushEndpoint(APIView):
     permission_classes = [IsAuthenticated]
 

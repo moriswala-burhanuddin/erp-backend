@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 from .views import (
     PushEndpoint, PullEndpoint, EmployeeViewSet, AttendanceViewSet, 
-    LeaveViewSet, PayrollViewSet, PerformanceReviewViewSet, health_check,
+    LeaveViewSet, PayrollViewSet, PerformanceReviewViewSet, health_check, db_diagnostic,
     SupplierViewSet, SupplierCustomFieldViewSet, 
     SupplierCustomFieldValueViewSet, SupplierTransactionViewSet,
     PaymentTermViewSet, SupplierDocumentViewSet,
@@ -30,6 +30,7 @@ urlpatterns = [
     path('sync/push', PushEndpoint.as_view(), name='sync-push'),
     path('sync/pull', PullEndpoint.as_view(), name='sync-pull'),
     path('health', health_check, name='health'),
+    path('db-diagnostic', db_diagnostic, name='db-diagnostic'),
     
     # Auth
     path('auth/login', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
