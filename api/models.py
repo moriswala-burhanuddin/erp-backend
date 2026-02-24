@@ -32,6 +32,10 @@ def generate_pt_id(): return generate_id('pt')
 def generate_recv_id(): return generate_id('recv')
 def generate_ri_id(): return generate_id('ri')
 def generate_doc_id(): return generate_id('doc')
+def generate_sp_id(): return generate_id('sp')
+def generate_gc_id(): return generate_id('gc')
+def generate_wo_id(): return generate_id('wo')
+def generate_del_id(): return generate_id('del')
 
 
 class Store(models.Model):

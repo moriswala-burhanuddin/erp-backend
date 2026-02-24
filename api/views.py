@@ -199,7 +199,16 @@ class PushEndpoint(APIView):
                         except Exception as row_error:
                             print(f"FAILED TO SAVE {table} row {obj_id}: {str(row_error)}")
                             print(f"Row Data: {cleaned_data}")
-                            raise row_error # Re-raise to trigger atomic rollback
+                            # Option 1: Raise to trigger atomic rollback for the whole batch (current)
+                            # Option 2: Just skip this row (dangerous for data integrity)
+                            # We'll continue the row loop for now but maybe mark the whole table as partially failed
+                            raise row_error # Keep current behavior for atomicity, but catch it at the table level
+                    
+                for table in ORDER:
+                    if table not in payload: continue
+                    
+                    # If we reach here, we processed rows. We should mark them as synced in the response even if one table failed?
+                    # No, transaction.atomic() handles the rollback.
 
             return Response({
                 "status": "success",
@@ -209,10 +218,15 @@ class PushEndpoint(APIView):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            print(f"SYNC ERROR: {str(e)}")
+            error_msg = str(e)
+            print(f"SYNC ERROR: {error_msg}")
+            # If it's a migration error, let the user know
+            if "no such table" in error_msg.lower():
+                error_msg = f"Database out of sync: {error_msg}. Please run migrations on the server."
+            
             return Response({
                 "status": "error",
-                "message": str(e)
+                "message": error_msg
             }, status=status.HTTP_400_BAD_REQUEST)
 
     def get_model(self, table_name):
