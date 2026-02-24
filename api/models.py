@@ -112,20 +112,80 @@ class Customer(models.Model):
     device_id = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+def generate_gc_id(): return generate_id('gc')
+def generate_wo_id(): return generate_id('wo')
+def generate_del_id(): return generate_id('del')
+def generate_sp_id(): return generate_id('sp')
+
 class Sale(models.Model):
+    STATUS_CHOICES = [
+        ('completed', 'Completed'),
+        ('suspended', 'Suspended'),
+        ('work_order', 'Work Order'),
+        ('delivery', 'Delivery'),
+        ('returned', 'Returned'),
+    ]
     id = models.CharField(max_length=50, primary_key=True, default=generate_sale_id)
     invoice_number = models.CharField(max_length=100, unique=True)
-    type = models.CharField(max_length=50)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='completed')
+    type = models.CharField(max_length=50) # retail, wholesale, etc.
     items = models.TextField() # JSON string
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     profit = models.DecimalField(max_digits=12, decimal_places=2)
-    payment_mode = models.CharField(max_length=50)
+    payment_mode = models.CharField(max_length=50) # Legacy single mode
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='sales')
     date = models.DateTimeField()
     quotation_id = models.CharField(max_length=50, null=True, blank=True)
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class SalePayment(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_sp_id)
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='payments')
+    payment_mode = models.CharField(max_length=50) # cash, card, upi, store_credit
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class GiftCard(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_gc_id)
+    card_number = models.CharField(max_length=100, unique=True)
+    value = models.DecimalField(max_digits=12, decimal_places=2)
+    balance = models.DecimalField(max_digits=12, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class WorkOrder(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_wo_id)
+    sale = models.OneToOneField(Sale, on_delete=models.CASCADE, related_name='work_order')
+    status = models.CharField(max_length=50, choices=[
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed')
+    ], default='pending')
+    notes = models.TextField(null=True, blank=True)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class Delivery(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_del_id)
+    sale = models.OneToOneField(Sale, on_delete=models.CASCADE, related_name='delivery')
+    employee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    address = models.TextField()
+    status = models.CharField(max_length=50, choices=[
+        ('pending', 'Pending'),
+        ('dispatched', 'Dispatched'),
+        ('delivered', 'Delivered')
+    ], default='pending')
+    delivery_date = models.DateTimeField(null=True, blank=True)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
     updated_at = models.DateTimeField(auto_now=True)
 
 class Supplier(models.Model):

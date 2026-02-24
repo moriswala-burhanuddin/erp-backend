@@ -84,6 +84,10 @@ class PushEndpoint(APIView):
             'commissions',
             'receivings',
             'receiving_items',
+            'gift_cards',
+            'sale_payments',
+            'work_orders',
+            'deliveries',
         ]
 
         synced_ids = {table: [] for table in ORDER}
@@ -297,7 +301,11 @@ class PullEndpoint(APIView):
                 'supplier_custom_values': SupplierCustomFieldValue,
                 'supplier_transactions': SupplierTransaction,
                 'payment_terms': PaymentTerm,
-                'supplier_documents': SupplierDocument
+                'supplier_documents': SupplierDocument,
+                'gift_cards': GiftCard,
+                'sale_payments': SalePayment,
+                'work_orders': WorkOrder,
+                'deliveries': Delivery,
             }
 
             for table in ORDER:
