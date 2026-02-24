@@ -61,6 +61,7 @@ class User(AbstractUser):
     ], default='staff')
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='users', null=True, blank=True)
     avatar = models.TextField(null=True, blank=True)
+    is_driver = models.BooleanField(default=False)
     device_id = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -179,6 +180,8 @@ class Delivery(models.Model):
     sale = models.OneToOneField(Sale, on_delete=models.CASCADE, related_name='delivery')
     employee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     address = models.TextField()
+    delivery_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    is_cod = models.BooleanField(default=False)
     status = models.CharField(max_length=50, choices=[
         ('pending', 'Pending'),
         ('dispatched', 'Dispatched'),
@@ -260,6 +263,17 @@ class PaymentTerm(models.Model):
     days = models.IntegerField(default=0)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='payment_terms')
     updated_at = models.DateTimeField(auto_now=True)
+
+class DeliveryZone(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_del_id)
+    name = models.CharField(max_length=255)
+    fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    is_active = models.BooleanField(default=True)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='delivery_zones')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} (${self.fee})"
 
 class SupplierDocument(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_doc_id)

@@ -11,7 +11,8 @@ from .models import (
     Employee, Attendance, Leave, Payroll, PerformanceReview,
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
     PaymentTerm, SupplierDocument,
-    Receiving, ReceivingItem
+    Receiving, ReceivingItem,
+    GiftCard, SalePayment, WorkOrder, Delivery, DeliveryZone
 )
 from .serializers import (
     EmployeeSerializer, AttendanceSerializer, LeaveSerializer, 
@@ -88,6 +89,7 @@ class PushEndpoint(APIView):
             'sale_payments',
             'work_orders',
             'deliveries',
+            'delivery_zones',
         ]
 
         synced_ids = {table: [] for table in ORDER}
@@ -239,6 +241,14 @@ class PushEndpoint(APIView):
             'supplier_documents': SupplierDocument,
             'receivings': Receiving,
             'receiving_items': ReceivingItem,
+            'gift_cards': GiftCard,
+            'sale_payments': SalePayment,
+            'work_orders': WorkOrder,
+            'deliveries': Delivery,
+            'delivery_zones': DeliveryZone,
+            'attendance': Attendance,
+            'leaves': Leave,
+            'employee': Employee,
         }
         return model_mapping.get(table_name)
 
@@ -273,7 +283,15 @@ class PullEndpoint(APIView):
                 'transactions', 
                 'stock_logs',
                 'receivings',
-                'receiving_items'
+                'receiving_items',
+                'gift_cards',
+                'sale_payments',
+                'work_orders',
+                'deliveries',
+                'delivery_zones',
+                'attendance',
+                'leaves',
+                'employees',
             ]
 
             updates = {}
@@ -306,6 +324,7 @@ class PullEndpoint(APIView):
                 'sale_payments': SalePayment,
                 'work_orders': WorkOrder,
                 'deliveries': Delivery,
+                'delivery_zones': DeliveryZone,
             }
 
             for table in ORDER:
