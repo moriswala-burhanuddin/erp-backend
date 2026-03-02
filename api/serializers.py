@@ -53,15 +53,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         }
         return data
 
-
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
 
 from .models import (
     Employee, Attendance, Leave, Payroll, PerformanceReview, Store, User, 
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
-    PaymentTerm, SupplierDocument
+    PaymentTerm, SupplierDocument, Invoice, InvoiceItem, Cheque
 )
+
+
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -134,3 +136,23 @@ class ReceivingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Receiving
         fields = '__all__'
+
+class InvoiceItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InvoiceItem
+        fields = '__all__'
+
+class ChequeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cheque
+        fields = '__all__'
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    items = InvoiceItemSerializer(many=True, read_only=True, source='invoice_items')
+    customer_name = serializers.CharField(source='customer.name', read_only=True, allow_null=True)
+    supplier_name = serializers.CharField(source='supplier.company_name', read_only=True, allow_null=True)
+
+    class Meta:
+        model = Invoice
+        fields = '__all__'
+

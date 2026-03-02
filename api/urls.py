@@ -6,8 +6,11 @@ from .views import (
     SupplierViewSet, SupplierCustomFieldViewSet, 
     SupplierCustomFieldValueViewSet, SupplierTransactionViewSet,
     PaymentTermViewSet, SupplierDocumentViewSet,
-    ReceivingViewSet, ReceivingItemViewSet
+    ReceivingViewSet, ReceivingItemViewSet,
+    InvoiceViewSet, InvoiceItemViewSet, ChequeViewSet
 )
+
+
 from .serializers import CustomTokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -25,6 +28,10 @@ router.register(r'payment-terms', PaymentTermViewSet)
 router.register(r'supplier-documents', SupplierDocumentViewSet)
 router.register(r'receivings', ReceivingViewSet, basename='receiving')
 router.register(r'receiving-items', ReceivingItemViewSet, basename='receiving-item')
+router.register(r'invoices', InvoiceViewSet, basename='invoice')
+router.register(r'invoice-items', InvoiceItemViewSet, basename='invoice-item')
+router.register(r'cheques', ChequeViewSet, basename='cheque')
+
 
 urlpatterns = [
     path('sync/push', PushEndpoint.as_view(), name='sync-push'),

@@ -36,6 +36,10 @@ def generate_sp_id(): return generate_id('sp')
 def generate_gc_id(): return generate_id('gc')
 def generate_wo_id(): return generate_id('wo')
 def generate_del_id(): return generate_id('del')
+def generate_inv_id(): return generate_id('inv')
+def generate_invitem_id(): return generate_id('ivi')
+def generate_chq_id(): return generate_id('chq')
+
 
 
 class Store(models.Model):
@@ -535,3 +539,94 @@ class ReceivingItem(models.Model):
 
     def __str__(self):
         return f"{self.product_name} × {self.quantity}"
+
+
+# ─────────────────────────────────────────────────────────────
+# INVOICE MODULE (Standalone Accounts Receivable/Payable)
+# ─────────────────────────────────────────────────────────────
+
+class Invoice(models.Model):
+    TYPE_CHOICES = [
+        ('customer', 'Customer Invoice (AR)'),
+        ('supplier', 'Supplier Bill (AP)'),
+    ]
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('sent', 'Sent'),
+        ('paid', 'Paid'),
+        ('overdue', 'Overdue'),
+        ('cancelled', 'Cancelled'),
+    ]
+    id = models.CharField(max_length=50, primary_key=True, default=generate_inv_id)
+    invoice_number = models.CharField(max_length=100, unique=True)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    
+    # Links
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    
+    # Totals
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_due = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Dates
+    date = models.DateTimeField(auto_now_add=True)
+    due_date = models.DateTimeField(null=True, blank=True)
+    
+    # Extra Meta
+    notes = models.TextField(null=True, blank=True)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='invoices')
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        party = self.customer.name if self.type == 'customer' and self.customer else (self.supplier.company_name if self.supplier else 'Unknown')
+        return f"{self.invoice_number} — {party} ({self.total_amount})"
+
+class InvoiceItem(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_invitem_id)
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='invoice_items')
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True)
+    product_name = models.CharField(max_length=255) # Snapshot
+    description = models.TextField(null=True, blank=True)
+    quantity = models.DecimalField(max_digits=10, decimal_places=3)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.product_name} x {self.quantity} (Inv: {self.invoice.invoice_number})"
+
+
+
+class Cheque(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_chq_id)
+    party_type = models.CharField(max_length=20, choices=[('supplier', 'Supplier'), ('customer', 'Customer')])
+    party_id = models.CharField(max_length=50) # Reference to Customer/Supplier ID
+    party_name = models.CharField(max_length=255)
+    cheque_number = models.CharField(max_length=50)
+    bank_name = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    issue_date = models.DateField()
+    clearing_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('cleared', 'Cleared'),
+        ('bounced', 'Bounced'),
+        ('cancelled', 'Cancelled')
+    ], default='pending')
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='cheques')
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Cheque {self.cheque_number} - {self.party_name} ({self.status})"

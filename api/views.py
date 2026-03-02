@@ -12,16 +12,22 @@ from .models import (
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
     PaymentTerm, SupplierDocument,
     Receiving, ReceivingItem,
-    GiftCard, SalePayment, WorkOrder, Delivery, DeliveryZone
+    GiftCard, SalePayment, WorkOrder, Delivery, DeliveryZone,
+    Invoice, InvoiceItem, Cheque
 )
+
+
 from .serializers import (
     EmployeeSerializer, AttendanceSerializer, LeaveSerializer, 
     PayrollSerializer, PerformanceReviewSerializer,
     SupplierSerializer, SupplierCustomFieldSerializer, 
     SupplierCustomFieldValueSerializer, SupplierTransactionSerializer,
     PaymentTermSerializer, SupplierDocumentSerializer,
-    ReceivingSerializer, ReceivingItemSerializer
+    ReceivingSerializer, ReceivingItemSerializer,
+    InvoiceSerializer, InvoiceItemSerializer, ChequeSerializer
 )
+
+
 from rest_framework import viewsets
 
 from rest_framework.decorators import api_view, permission_classes
@@ -85,12 +91,16 @@ class PushEndpoint(APIView):
             'commissions',
             'receivings',
             'receiving_items',
+            'invoices',
+            'invoice_items',
+            'cheques',
             'gift_cards',
             'sale_payments',
             'work_orders',
             'deliveries',
             'delivery_zones',
         ]
+
 
         synced_ids = {table: [] for table in ORDER}
 
@@ -255,6 +265,8 @@ class PushEndpoint(APIView):
             'supplier_documents': SupplierDocument,
             'receivings': Receiving,
             'receiving_items': ReceivingItem,
+            'invoices': Invoice,
+            'invoice_items': InvoiceItem,
             'gift_cards': GiftCard,
             'sale_payments': SalePayment,
             'work_orders': WorkOrder,
@@ -263,7 +275,9 @@ class PushEndpoint(APIView):
             'attendance': Attendance,
             'leaves': Leave,
             'employee': Employee,
+            'cheques': Cheque,
         }
+
         return model_mapping.get(table_name)
 
 class PullEndpoint(APIView):
@@ -303,10 +317,14 @@ class PullEndpoint(APIView):
                 'work_orders',
                 'deliveries',
                 'delivery_zones',
+                'invoices',
+                'invoice_items',
+                'cheques',
                 'attendance',
                 'leaves',
                 'employees',
             ]
+
 
             updates = {}
             
@@ -339,7 +357,10 @@ class PullEndpoint(APIView):
                 'work_orders': WorkOrder,
                 'deliveries': Delivery,
                 'delivery_zones': DeliveryZone,
+                'invoice_items': InvoiceItem,
+                'cheques': Cheque,
             }
+
 
             for table in ORDER:
                 model = model_mapping.get(table)
@@ -624,3 +645,37 @@ class ReceivingItemViewSet(viewsets.ModelViewSet):
         if receiving_id:
             qs = qs.filter(receiving_id=receiving_id)
         return qs
+
+class InvoiceViewSet(viewsets.ModelViewSet):
+    serializer_class = InvoiceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        store_id = self.request.query_params.get('store_id')
+        qs = Invoice.objects.prefetch_related('invoice_items').select_related('customer', 'supplier')
+        if store_id:
+            qs = qs.filter(store_id=store_id)
+        return qs.order_by('-date')
+
+class InvoiceItemViewSet(viewsets.ModelViewSet):
+    serializer_class = InvoiceItemSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        invoice_id = self.request.query_params.get('invoice_id')
+        qs = InvoiceItem.objects.all()
+        if invoice_id:
+            qs = qs.filter(invoice_id=invoice_id)
+        return qs
+
+
+
+class ChequeViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ChequeSerializer
+
+    def get_queryset(self):
+        store_id = self.request.query_params.get('store_id')
+        if store_id:
+            return Cheque.objects.filter(store_id=store_id)
+        return Cheque.objects.all()
