@@ -419,8 +419,14 @@ class PullEndpoint(APIView):
                      queryset = model.objects.all()
 
                 if last_sync:
-                    # Generic filter field is updated_at, but some tables might use created_at
-                    filter_field = 'created_at' if table in ['stock_logs', 'loyalty_points', 'commissions'] else 'updated_at'
+                    # Generic filter field is updated_at, but some tables might use created_at or uploaded_at
+                    if table in ['stock_logs', 'loyalty_points', 'commissions', 'supplier_transactions', 'cheques']:
+                        filter_field = 'created_at'
+                    elif table == 'supplier_documents':
+                        filter_field = 'uploaded_at'
+                    else:
+                        filter_field = 'updated_at'
+                        
                     queryset = queryset.filter(**{f"{filter_field}__gt": last_sync})
                 
                 # Serialize
