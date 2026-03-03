@@ -446,7 +446,7 @@ class PullEndpoint(APIView):
                 else:
                      queryset = model.objects.all()
 
-                if last_sync:
+                if last_sync and model not in [Store, User, ExpenseCategory, TaxSlab]:
                     # Generic filter field is updated_at, but some tables might use created_at or uploaded_at
                     if table in ['stock_logs', 'loyalty_points', 'commissions', 'supplier_transactions', 'cheques']:
                         filter_field = 'created_at'
