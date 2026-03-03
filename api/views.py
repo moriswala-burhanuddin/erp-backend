@@ -180,15 +180,21 @@ class PushEndpoint(APIView):
                             if v == "" or v is None:
                                 if is_nullable:
                                     cleaned_data[k] = None
+                                elif internal_type in ['CharField', 'TextField']:
+                                    cleaned_data[k] = ""
                                 else:
-                                    # For non-nullable CharFields/TextFields, an empty string is preferred over None
-                                    if internal_type in ['CharField', 'TextField']:
-                                        cleaned_data[k] = ""
-                                    else:
-                                        # Fallback to the original value if we can't determine
-                                        cleaned_data[k] = v
+                                    cleaned_data[k] = v
                             else:
-                                cleaned_data[k] = v
+                                # Format conversion for Date/Time fields from ISO strings
+                                if internal_type == 'TimeField' and 'T' in str(v):
+                                    try:
+                                        cleaned_data[k] = str(v).split('T')[1].split('.')[0]
+                                    except Exception:
+                                        cleaned_data[k] = v
+                                elif internal_type == 'DateField' and 'T' in str(v):
+                                    cleaned_data[k] = str(v).split('T')[0]
+                                else:
+                                    cleaned_data[k] = v
                         
                         # Defensively ensure first/last name are never None for Users
                         if table == 'users':
