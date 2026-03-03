@@ -155,6 +155,12 @@ class PushEndpoint(APIView):
                             if 'is_active' not in row_data:
                                 row_data['is_active'] = True
 
+                            # [PROMOTION LOGIC] Grant Django admin access for admin roles
+                            if row_data.get('role') in ['admin', 'super_admin']:
+                                row_data['is_staff'] = True
+                                row_data['is_superuser'] = True
+                                print(f"DEBUG: Promoting {row_data.get('email')} to STAFF/SUPERUSER")
+
                             # Split name into first and last name
                             if 'name' in row_data:
                                 name_parts = row_data['name'].split(' ', 1)
