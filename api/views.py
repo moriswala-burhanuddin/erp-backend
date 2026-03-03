@@ -166,15 +166,27 @@ class PushEndpoint(APIView):
                         # Also allow attnames (like store_id)
                         valid_fields.update({getattr(f, 'attname', None) for f in model._meta.get_fields()})
                         
-                        # Normalize data: filter non-existent fields and treat empty strings/None as None for certain field types
+                        # Normalize data: filter non-existent fields and treat empty strings/None appropriately
                         cleaned_data = {}
                         for k, v in row_data.items():
                             if k not in valid_fields:
                                 continue
                             
-                            # Treat empty strings as None for consistency (especially for DateFields and NULLABLE fields)
+                            # Determine if the field allows NULL
+                            field_obj = next((f for f in model._meta.get_fields() if f.name == k or getattr(f, 'attname', None) == k), None)
+                            is_nullable = getattr(field_obj, 'null', False)
+
                             if v == "" or v is None:
-                                cleaned_data[k] = None
+                                if is_nullable:
+                                    cleaned_data[k] = None
+                                else:
+                                    # For non-nullable CharFields, an empty string is preferred over None
+                                    from django.db.models import CharField, TextField
+                                    if isinstance(field_obj, (CharField, TextField)):
+                                        cleaned_data[k] = ""
+                                    else:
+                                        # Fallback to None if we can't determine, but most cases are handled
+                                        cleaned_data[k] = v
                             else:
                                 cleaned_data[k] = v
                         
@@ -297,6 +309,8 @@ class PullEndpoint(APIView):
                 'stores', 
                 'users', 
                 'accounts', 
+                'expense_categories',
+                'tax_slabs',
                 'customers', 
                 'payment_terms',
                 'suppliers',
@@ -324,7 +338,6 @@ class PullEndpoint(APIView):
                 'leaves',
                 'employees',
             ]
-
 
             updates = {}
             
@@ -358,19 +371,47 @@ class PullEndpoint(APIView):
                 'deliveries': Delivery,
                 'delivery_zones': DeliveryZone,
                 'invoice_items': InvoiceItem,
+                'invoices': Invoice,
+                'receivings': Receiving,
+                'receiving_items': ReceivingItem,
+                'attendance': Attendance,
+                'leaves': Leave,
+                'employees': Employee,
                 'cheques': Cheque,
             }
 
 
             for table in ORDER:
+                print(f"[SYNC] Pulling table: {table}")
                 model = model_mapping.get(table)
                 if not model:
                     continue
                 
-                if table == 'stores': 
+                # 1. Class-based overrides (Most reliable)
+                if model == Store: 
                      queryset = model.objects.filter(id=store_id)
-                else:
+                elif model == SalePayment:
+                     queryset = model.objects.filter(sale__store_id=store_id)
+                elif model == SupplierCustomFieldValue:
+                     queryset = model.objects.filter(supplier__store_id=store_id)
+                elif model in [LoyaltyPoint, Commission]:
+                     queryset = model.objects.filter(sale__store_id=store_id)
+                elif model in [WorkOrder, Delivery]:
+                     queryset = model.objects.filter(sale__store_id=store_id)
+                elif model in [ReceivingItem]:
+                     queryset = model.objects.filter(receiving__store_id=store_id)
+                elif model in [InvoiceItem]:
+                     queryset = model.objects.filter(invoice__store_id=store_id)
+                elif model in [ExpenseCategory, TaxSlab]:
+                     queryset = model.objects.all()
+                
+                # 2. Field-based filtering
+                elif 'store' in [f.name for f in model._meta.fields] or 'store_id' in [getattr(f, 'attname', None) for f in model._meta.fields]:
                      queryset = model.objects.filter(store_id=store_id)
+                
+                # 3. Fallback
+                else:
+                     queryset = model.objects.all()
 
                 if last_sync:
                     # Generic filter field is updated_at, but some tables might use created_at
@@ -456,9 +497,12 @@ class PullEndpoint(APIView):
         except Exception as e:
             import traceback
             traceback.print_exc()
+            error_msg = str(e)
+            if 'table' in locals():
+                error_msg = f"Error in table {table}: {error_msg}"
             return Response({
                 "status": "error",
-                "message": str(e)
+                "message": error_msg
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
