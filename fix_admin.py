@@ -8,17 +8,19 @@ django.setup()
 
 from api.models import User
 
-def fix_admin(email):
+def fix_admin(email, password):
     try:
         user = User.objects.get(email=email)
         print(f"Found user: {user.email}")
         
         user.is_staff = True
         user.is_superuser = True
+        user.is_active = True
         user.role = 'super_admin'
+        user.set_password(password) # DEFINITELY hash and set the password
         user.save()
         
-        print(f"✅ SUCCESS: {email} is now a Superuser/Admin.")
+        print(f"✅ SUCCESS: {email} is now a Superuser/Admin with password reset.")
         print("You can now login at https://erp.decentinstitute.in/admin/")
     except User.DoesNotExist:
         print(f"❌ ERROR: User with email {email} not found in database.")
@@ -27,4 +29,5 @@ def fix_admin(email):
 
 if __name__ == "__main__":
     target_email = "burhanuddinmoris52@gmail.com"
-    fix_admin(target_email)
+    target_pass = "b5253" # The password you provided
+    fix_admin(target_email, target_pass)
