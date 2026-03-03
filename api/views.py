@@ -175,20 +175,25 @@ class PushEndpoint(APIView):
                             # Determine if the field allows NULL
                             field_obj = next((f for f in model._meta.get_fields() if f.name == k or getattr(f, 'attname', None) == k), None)
                             is_nullable = getattr(field_obj, 'null', False)
+                            internal_type = field_obj.get_internal_type() if field_obj else ""
 
                             if v == "" or v is None:
                                 if is_nullable:
                                     cleaned_data[k] = None
                                 else:
-                                    # For non-nullable CharFields, an empty string is preferred over None
-                                    from django.db.models import CharField, TextField
-                                    if isinstance(field_obj, (CharField, TextField)):
+                                    # For non-nullable CharFields/TextFields, an empty string is preferred over None
+                                    if internal_type in ['CharField', 'TextField']:
                                         cleaned_data[k] = ""
                                     else:
-                                        # Fallback to None if we can't determine, but most cases are handled
+                                        # Fallback to the original value if we can't determine
                                         cleaned_data[k] = v
                             else:
                                 cleaned_data[k] = v
+                        
+                        # Defensively ensure first/last name are never None for Users
+                        if table == 'users':
+                            if cleaned_data.get('first_name') is None: cleaned_data['first_name'] = ""
+                            if cleaned_data.get('last_name') is None: cleaned_data['last_name'] = ""
                         
                         # Debug: Print what we are about to save for users specifically
                         if table == 'users':
