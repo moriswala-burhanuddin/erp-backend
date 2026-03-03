@@ -212,6 +212,18 @@ class PushEndpoint(APIView):
 
                         obj_id = cleaned_data.pop('id')
                         try:
+                            # Pre-check: validate required FK fields are present before saving
+                            required_fk_fields = [
+                                f.attname for f in model._meta.get_fields()
+                                if hasattr(f, 'attname') and f.is_relation
+                                and not getattr(f, 'null', True)
+                                and f.concrete
+                            ]
+                            missing_fks = [fk for fk in required_fk_fields if cleaned_data.get(fk) is None]
+                            if missing_fks:
+                                print(f"SKIPPING {table} row {obj_id}: Missing required FK fields: {missing_fks}")
+                                continue
+
                             # Special handling for users: Reconcile by email if ID doesn't match
                             if table == 'users' and 'email' in cleaned_data:
                                 email = cleaned_data.get('email')
@@ -230,12 +242,10 @@ class PushEndpoint(APIView):
                             print(f"SAVED {table} {obj_id}: Created={created}, is_deleted={getattr(obj, 'is_deleted', 'N/A')}")
                             synced_ids[table].append(obj_id)
                         except Exception as row_error:
-                            print(f"FAILED TO SAVE {table} row {obj_id}: {str(row_error)}")
+                            print(f"SKIPPING {table} row {obj_id} due to error: {str(row_error)}")
                             print(f"Row Data: {cleaned_data}")
-                            # Option 1: Raise to trigger atomic rollback for the whole batch (current)
-                            # Option 2: Just skip this row (dangerous for data integrity)
-                            # We'll continue the row loop for now but maybe mark the whole table as partially failed
-                            raise row_error # Keep current behavior for atomicity, but catch it at the table level
+                            # Skip this row (don't abort the whole sync for bad seed data)
+                            continue
                     
                 for table in ORDER:
                     if table not in payload: continue
