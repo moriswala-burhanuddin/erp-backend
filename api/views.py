@@ -420,7 +420,9 @@ class PullEndpoint(APIView):
                 
                 # 1. Class-based overrides (Most reliable)
                 if model == Store: 
-                     queryset = model.objects.filter(id=store_id)
+                     queryset = model.objects.all() # Fetch ALL stores so manager's store appears
+                elif model == User:
+                     queryset = model.objects.all() # Fetch ALL users for cross-store staff/admins
                 elif model == SalePayment:
                      queryset = model.objects.filter(sale__store_id=store_id)
                 elif model == SupplierCustomFieldValue:
