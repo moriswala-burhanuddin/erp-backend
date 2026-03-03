@@ -94,11 +94,11 @@ class PushEndpoint(APIView):
             'invoices',
             'invoice_items',
             'cheques',
-            'gift_cards',
-            'sale_payments',
-            'work_orders',
-            'deliveries',
-            'delivery_zones',
+            'attendance',
+            'leaves',
+            'employees',
+            'payroll',
+            'performance_reviews',
         ]
 
 
@@ -291,7 +291,9 @@ class PushEndpoint(APIView):
             'delivery_zones': DeliveryZone,
             'attendance': Attendance,
             'leaves': Leave,
-            'employee': Employee,
+            'employees': Employee,
+            'payroll': Payroll,
+            'performance_reviews': PerformanceReview,
             'cheques': Cheque,
         }
 
@@ -342,6 +344,8 @@ class PullEndpoint(APIView):
                 'attendance',
                 'leaves',
                 'employees',
+                'payroll',
+                'performance_reviews',
             ]
 
             updates = {}
