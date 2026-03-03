@@ -449,75 +449,72 @@ class PullEndpoint(APIView):
                         
                     queryset = queryset.filter(**{f"{filter_field}__gt": last_sync})
                 
-                # Serialize
-                rows = []
-                for obj in queryset:
-                    row_data = {}
-                    for field in obj._meta.fields:
-                        if field.name in [
-                            'password', 'is_superuser', 'is_staff', 'is_active', 
-                            'date_joined', 'groups', 'user_permissions', 'last_login', 
-                            'username', 'first_name', 'last_name'
-                        ]:
-                            continue
-                        
-                        val = getattr(obj, field.name)
-                        
-                        # Determine key_name (Local SQLite expects 'field_id' for Foreign Keys)
-                        key_name = field.name
-                        if field.is_relation and not key_name.endswith('_id'):
-                            key_name = f"{key_name}_id"
+                try:
+                    rows = []
+                    for obj in queryset:
+                        row_data = {}
+                        for field in obj._meta.fields:
+                            if field.name in [
+                                'password', 'is_superuser', 'is_staff', 'is_active', 
+                                'date_joined', 'groups', 'user_permissions', 'last_login', 
+                                'username', 'first_name', 'last_name'
+                            ]:
+                                continue
+                            
+                            val = getattr(obj, field.name)
+                            
+                            # Determine key_name (Local SQLite expects 'field_id' for Foreign Keys)
+                            key_name = field.name
+                            if field.is_relation and not key_name.endswith('_id'):
+                                key_name = f"{key_name}_id"
 
-                        if isinstance(val, (datetime, date)):
-                            row_data[key_name] = val.isoformat()
-                        elif isinstance(val, bool):
-                            # SQLite doesn't have a native BOOLEAN, usually uses 0/1
-                            row_data[key_name] = 1 if val else 0
-                        elif field.is_relation and val:
-                            # For JSON serialization, we just want the ID of the related object
-                            row_data[key_name] = str(val.pk) if hasattr(val, 'pk') else str(val)
-                        elif val is not None:
-                            # Convert Decimals and other objects to strings to avoid binding errors
-                            # but keep numbers as numbers if possible
-                            if isinstance(val, (int, float)):
-                                row_data[key_name] = val
+                            if isinstance(val, (datetime, date)):
+                                row_data[key_name] = val.isoformat()
+                            elif isinstance(val, bool):
+                                row_data[key_name] = 1 if val else 0
+                            elif field.is_relation and val:
+                                row_data[key_name] = str(val.pk) if hasattr(val, 'pk') else str(val)
+                            elif val is not None:
+                                if isinstance(val, (int, float)):
+                                    row_data[key_name] = val
+                                else:
+                                    row_data[key_name] = str(val)
                             else:
-                                row_data[key_name] = str(val)
-                        else:
-                            row_data[key_name] = None
-                    
-                    # SPECIAL HANDLING FOR ACCOUNTS & PAYMENT TYPES
-                    if table in ['accounts', 'sales', 'purchases', 'transactions']:
-                        if row_data.get('type') not in ['cash', 'card', 'wallet']:
-                            row_data['type'] = 'card' # Map bank/other to card for local DB
-                    
-                    # SPECIAL HANDLING FOR SALES
-                    if table == 'sales':
-                        if row_data.get('type') not in ['retail', 'cash', 'credit']:
-                             row_data['type'] = 'cash'
-                        if row_data.get('payment_mode') not in ['cash', 'card', 'wallet']:
-                             row_data['payment_mode'] = 'card'
-                    
-                    # SPECIAL HANDLING FOR PURCHASES
-                    if table == 'purchases':
-                        if row_data.get('type') not in ['cash', 'credit']:
-                             row_data['type'] = 'cash'
-
-                    # SPECIAL HANDLING FOR USERS
-                    if table == 'users' and isinstance(obj, User):
-                        # Construct 'name' from first_name + last_name
-                        row_data['name'] = f"{obj.first_name} {obj.last_name}".strip()
-                        if not row_data['name']:
-                             row_data['name'] = obj.username # Fallback
+                                row_data[key_name] = None
                         
-                        # COMPATIBILITY: Map 'staff' to 'user' for local DB constraint
-                        if row_data.get('role') == 'staff':
-                            row_data['role'] = 'user'
+                        # SPECIAL HANDLING FOR ACCOUNTS & PAYMENT TYPES
+                        if table in ['accounts', 'sales', 'purchases', 'transactions']:
+                            if row_data.get('type') not in ['cash', 'card', 'wallet']:
+                                row_data['type'] = 'card'
+                        
+                        # SPECIAL HANDLING FOR SALES
+                        if table == 'sales':
+                            if row_data.get('type') not in ['retail', 'cash', 'credit']:
+                                 row_data['type'] = 'cash'
+                            if row_data.get('payment_mode') not in ['cash', 'card', 'wallet']:
+                                 row_data['payment_mode'] = 'card'
+                        
+                        # SPECIAL HANDLING FOR PURCHASES
+                        if table == 'purchases':
+                            if row_data.get('type') not in ['cash', 'credit']:
+                                 row_data['type'] = 'cash'
 
-                    rows.append(row_data)
-                
-                if rows:
-                    updates[table] = rows
+                        # SPECIAL HANDLING FOR USERS
+                        if table == 'users' and isinstance(obj, User):
+                            row_data['name'] = f"{obj.first_name} {obj.last_name}".strip()
+                            if not row_data['name']:
+                                 row_data['name'] = obj.username
+                            if row_data.get('role') == 'staff':
+                                row_data['role'] = 'user'
+
+                        rows.append(row_data)
+                    
+                    if rows:
+                        updates[table] = rows
+                except Exception as table_err:
+                    print(f"[PULL] SKIPPING table '{table}': {str(table_err)}")
+                    # Don't abort the whole sync — skip this table and continue
+                    continue
 
             return Response({
                 "status": "success",
