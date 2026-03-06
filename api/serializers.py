@@ -60,8 +60,14 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 from .models import (
     Employee, Attendance, Leave, Payroll, PerformanceReview, Store, User, 
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
-    PaymentTerm, SupplierDocument, Invoice, InvoiceItem, Cheque
+    PaymentTerm, SupplierDocument, Invoice, InvoiceItem, Cheque, Category
 )
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = '__all__'
 
 
 

@@ -39,6 +39,7 @@ def generate_del_id(): return generate_id('del')
 def generate_inv_id(): return generate_id('inv')
 def generate_invitem_id(): return generate_id('ivi')
 def generate_chq_id(): return generate_id('chq')
+def generate_cat_id(): return generate_id('cat')
 
 
 
@@ -90,11 +91,22 @@ class Account(models.Model):
     device_id = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+class Category(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_cat_id)
+    name = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='categories')
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
 class Product(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_prod_id)
     name = models.CharField(max_length=255)
     sku = models.CharField(max_length=100)
-    category = models.CharField(max_length=100, null=True, blank=True)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     selling_price = models.DecimalField(max_digits=10, decimal_places=2)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.IntegerField(default=0)

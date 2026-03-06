@@ -13,7 +13,7 @@ from .models import (
     PaymentTerm, SupplierDocument,
     Receiving, ReceivingItem,
     GiftCard, SalePayment, WorkOrder, Delivery, DeliveryZone,
-    Invoice, InvoiceItem, Cheque
+    Invoice, InvoiceItem, Cheque, Category
 )
 
 
@@ -70,6 +70,7 @@ class PushEndpoint(APIView):
             'stores', 
             'users', 
             'accounts', 
+            'categories',
             'expense_categories',
             'tax_slabs',
             'customers', 
@@ -317,6 +318,7 @@ class PushEndpoint(APIView):
             'payroll': Payroll,
             'performance_reviews': PerformanceReview,
             'cheques': Cheque,
+            'categories': Category,
         }
 
         return model_mapping.get(table_name)
@@ -338,6 +340,7 @@ class PullEndpoint(APIView):
                 'stores', 
                 'users', 
                 'accounts', 
+                'categories',
                 'expense_categories',
                 'tax_slabs',
                 'customers', 
@@ -409,6 +412,7 @@ class PullEndpoint(APIView):
                 'leaves': Leave,
                 'employees': Employee,
                 'cheques': Cheque,
+                'categories': Category,
             }
 
 
