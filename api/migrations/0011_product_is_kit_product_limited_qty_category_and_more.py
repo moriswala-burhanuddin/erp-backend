@@ -5,6 +5,32 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
+def migrate_categories_data(apps, schema_editor):
+    Product = apps.get_model('api', 'Product')
+    Category = apps.get_model('api', 'Category')
+    
+    # Store ID + Name mapping to avoid duplicates per store
+    category_cache = {}
+    
+    for product in Product.objects.all():
+        old_cat_name = getattr(product, 'category_old', None)
+        if not old_cat_name:
+            continue
+            
+        store = product.store
+        cache_key = (store.id, old_cat_name)
+        
+        if cache_key not in category_cache:
+            cat, created = Category.objects.get_or_create(
+                name=old_cat_name,
+                store=store,
+                defaults={'device_id': 'migration-sync'}
+            )
+            category_cache[cache_key] = cat
+            
+        product.category = category_cache[cache_key]
+        product.save()
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -33,9 +59,19 @@ class Migration(migrations.Migration):
                 ('store', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='categories', to='api.store')),
             ],
         ),
-        migrations.AlterField(
+        migrations.RenameField(
+            model_name='product',
+            old_name='category',
+            new_name='category_old',
+        ),
+        migrations.AddField(
             model_name='product',
             name='category',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='products', to='api.category'),
+        ),
+        migrations.RunPython(migrate_categories_data),
+        migrations.RemoveField(
+            model_name='product',
+            name='category_old',
         ),
     ]
