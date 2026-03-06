@@ -117,6 +117,8 @@ class Product(models.Model):
     tax_slab = models.ForeignKey('TaxSlab', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     last_used = models.DateTimeField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
+    is_kit = models.BooleanField(default=False)
+    limited_qty = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     device_id = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
