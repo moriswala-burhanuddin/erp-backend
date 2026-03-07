@@ -40,6 +40,12 @@ def generate_inv_id(): return generate_id('inv')
 def generate_invitem_id(): return generate_id('ivi')
 def generate_chq_id(): return generate_id('chq')
 def generate_cat_id(): return generate_id('cat')
+def generate_pimg_id(): return generate_id('pimg')
+def generate_feat_id(): return generate_id('feat')
+def generate_cart_id(): return generate_id('cart')
+def generate_ci_id(): return generate_id('ci')
+def generate_rev_id(): return generate_id('rev')
+def generate_fb_id(): return generate_id('fb')
 
 
 
@@ -671,7 +677,7 @@ class Cheque(models.Model):
 # ──────────────────────────────────────────────────────────────
 
 class Review(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_id)
+    id = models.CharField(max_length=50, primary_key=True, default=generate_rev_id)
     user_name = models.CharField(max_length=255)
     user_email = models.EmailField(null=True, blank=True)
     product_id = models.CharField(max_length=50, null=True, blank=True) 
@@ -685,19 +691,19 @@ class Review(models.Model):
         return f"Review by {self.user_name} ({self.rating} stars)"
 
 class ProductImage(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=lambda: generate_id('pimg'))
+    id = models.CharField(max_length=50, primary_key=True, default=generate_pimg_id)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
     image = models.TextField(null=True, blank=True) # URL or Base64
     is_thumbnail = models.BooleanField(default=False)
 
 class KeyFeature(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=lambda: generate_id('feat'))
+    id = models.CharField(max_length=50, primary_key=True, default=generate_feat_id)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='features')
     title = models.CharField(max_length=200)
     description = models.TextField()
 
 class Cart(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_id)
+    id = models.CharField(max_length=50, primary_key=True, default=generate_cart_id)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='carts', null=True, blank=True) # For logged-in users
     session_key = models.CharField(max_length=40, null=True, blank=True, unique=True) # For anonymous users
     created_at = models.DateTimeField(auto_now_add=True)
@@ -707,7 +713,7 @@ class Cart(models.Model):
         return f"Cart {self.id} (User: {self.user.username if self.user else 'Anonymous'})"
 
 class CartItem(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_id)
+    id = models.CharField(max_length=50, primary_key=True, default=generate_ci_id)
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.DecimalField(max_digits=10, decimal_places=3, default=1)
@@ -719,7 +725,7 @@ class CartItem(models.Model):
         return f"{self.quantity} x {self.product.name} in Cart {self.cart.id}"
 
 class Feedback(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_id)
+    id = models.CharField(max_length=50, primary_key=True, default=generate_fb_id)
     name = models.CharField(max_length=255)
     email = models.EmailField()
     subject = models.CharField(max_length=255)
