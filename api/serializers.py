@@ -251,14 +251,17 @@ class ProductSerializer(serializers.ModelSerializer):
     price_inr = serializers.SerializerMethodField()
     price_usd = serializers.SerializerMethodField()
     discount_percentage = serializers.IntegerField(required=False)
+    thumbnail = serializers.CharField(source='image', read_only=True)
+    slug = serializers.SerializerMethodField()
+    featured = serializers.BooleanField(default=False, read_only=True)
     
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'title', 'description', 'sku', 'category', 'category_id',
+            'id', 'name', 'title', 'description', 'sku', 'category', 'category_id', 'slug',
             'selling_price', 'purchase_price', 'quantity', 'unit', 'brand', 'barcode',
-            'tax_slab', 'image', 'images', 'features', 'price', 'price_inr', 'price_usd',
-            'discount_percentage', 'updated_at'
+            'tax_slab', 'image', 'thumbnail', 'images', 'features', 'price', 'price_inr', 'price_usd',
+            'discount_percentage', 'featured', 'updated_at'
         ]
         
     def get_price_inr(self, obj):
@@ -266,6 +269,10 @@ class ProductSerializer(serializers.ModelSerializer):
         
     def get_price_usd(self, obj):
         return obj.price_usd or obj.selling_price
+
+    def get_slug(self, obj):
+        from django.utils.text import slugify
+        return slugify(obj.name)
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -291,6 +298,7 @@ class FeedbackSerializer(serializers.ModelSerializer):
 
 class CartItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
+    project = ProductSerializer(source='product', read_only=True)
     product_id = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(), source='product', write_only=True
     )
@@ -300,15 +308,20 @@ class CartItemSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CartItem
-        fields = ['id', 'product', 'product_id', 'product_name', 'product_image', 'quantity', 'price_at_time', 'subtotal']
+        fields = ['id', 'product', 'project', 'product_id', 'product_name', 'product_image', 'quantity', 'price_at_time', 'subtotal']
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
     total_price = serializers.SerializerMethodField()
+    count = serializers.SerializerMethodField()
     
     class Meta:
         model = Cart
-        fields = ['id', 'user', 'session_key', 'items', 'total_price', 'updated_at']
+        fields = ['id', 'user', 'session_key', 'items', 'total_price', 'count', 'updated_at']
         
     def get_total_price(self, obj):
-        return sum(item.quantity * item.price_at_time for item in obj.items.all())
+        return sum(float(item.quantity) * float(item.price_at_time) for item in obj.items.all())
+
+    def get_count(self):
+        # Return total items in cart
+        return self.items.count() if hasattr(self, 'items') else 0

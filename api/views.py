@@ -822,7 +822,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         if store_id:
             qs = qs.filter(store_id=store_id)
         if sku:
-            qs = qs.filter(sku=sku)
+            if sku.startswith('prod-'):
+                qs = qs.filter(id=sku.replace('prod-', ''))
+            else:
+                qs = qs.filter(sku=sku)
         if category_slug:
             qs = qs.filter(Q(category__name__iexact=category_slug.replace('-', ' ')) | Q(category__id=category_slug))
         if search:
