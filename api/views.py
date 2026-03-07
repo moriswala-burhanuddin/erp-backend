@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import status, serializers, viewsets
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from datetime import datetime, date
 from django.db import transaction
 import json
@@ -956,6 +956,7 @@ def register(request):
         
         # Create a Customer record for this new user so they appear in the ERP
         from .models import Customer, Store
+        customer_created = False
         try:
             store = Store.objects.first()
             if store:
@@ -969,11 +970,13 @@ def register(request):
                     source='Online',
                     store=store
                 )
+                customer_created = True
         except Exception as e:
             print(f"Failed to create Customer record for new user: {e}")
 
         return Response({
             "status": "success",
+            "customer_created": customer_created,
             "user": {
                 "id": user.id,
                 "email": user.email,
@@ -1022,16 +1025,26 @@ class CartViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     @action(detail=False, methods=['POST'])
-    def add_item(self, request):
+    def add(self, request):
         cart = self._get_cart(request)
         if not cart:
             return Response({"error": "No session provided"}, status=400)
             
-        product_id = request.data.get('product_id')
+        # Support both 'product_id' (internal) and 'project_id' (Elegance frontend name)
+        product_id = request.data.get('product_id') or request.data.get('project_id')
         quantity = Decimal(str(request.data.get('quantity', 1)))
         
-        product = get_object_or_404(Product, id=product_id)
-        
+        if not product_id:
+            return Response({"error": "Product ID is required"}, status=400)
+            
+        # Try to find product by ID, then by SKU (as the frontend often uses SKU as ID)
+        product = Product.objects.filter(id=product_id).first()
+        if not product:
+            product = Product.objects.filter(sku=product_id).first()
+            
+        if not product:
+            return Response({"error": f"Product not found with ID or SKU: {product_id}"}, status=404)
+            
         item, created = CartItem.objects.get_or_create(
             cart=cart, 
             product=product,
@@ -1058,3 +1071,27 @@ class CartViewSet(viewsets.ViewSet):
         if cart:
             cart.items.all().delete()
         return Response({"status": "cleared"})
+
+class CartItemViewSet(viewsets.ModelViewSet):
+    queryset = CartItem.objects.all()
+    serializer_class = CartItemSerializer
+    permission_classes = [AllowAny]
+
+    def _get_cart(self, request):
+        if request.user.is_authenticated:
+            return Cart.objects.filter(user=request.user).first()
+        else:
+            session_key = request.headers.get('x-cart-session')
+            return Cart.objects.filter(session_key=session_key).first()
+
+    def get_queryset(self):
+        cart = self._get_cart(self.request)
+        if not cart:
+            return CartItem.objects.none()
+        return CartItem.objects.filter(cart=cart)
+
+    def perform_create(self, serializer):
+        cart = self._get_cart(self.request)
+        if not cart:
+            raise serializers.ValidationError("No cart session found")
+        serializer.save(cart=cart)
