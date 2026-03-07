@@ -780,12 +780,31 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         store_id = self.request.query_params.get('store_id')
         sku = self.request.query_params.get('sku')
-        qs = Product.objects.filter(is_deleted=False)
+        category_slug = self.request.query_params.get('category__slug')
+        search = self.request.query_params.get('search')
+        
+        qs = Product.objects.filter(is_deleted=False).select_related('category', 'store')
+        
         if store_id:
             qs = qs.filter(store_id=store_id)
         if sku:
             qs = qs.filter(sku=sku)
-        return qs
+        if category_slug:
+            # Match category by name (case-insensitive) as a fallback for slug
+            # Since we generate slug from name in serializer: name.lower().replace(' ', '-')
+            # We reverse it roughly here for filtering
+            cat_name = category_slug.replace('-', ' ')
+            qs = qs.filter(category__name__icontains=cat_name)
+            
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(name__icontains=search) | 
+                Q(description__icontains=search) | 
+                Q(sku__icontains=search) |
+                Q(brand__icontains=search)
+            )
+        return qs.order_by('-updated_at')
 
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()

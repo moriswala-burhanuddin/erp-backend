@@ -99,9 +99,17 @@ from .models import (
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    slug = serializers.SerializerMethodField()
     class Meta:
         model = Category
-        fields = '__all__'
+        fields = ['id', 'name', 'description', 'store', 'slug']
+    
+    def get_slug(self, obj):
+        import re
+        # Basic slugification: lower case, replace non-alphanumeric with -
+        s = obj.name.lower()
+        s = re.sub(r'[^a-zA-Z0-9]', '-', s)
+        return re.sub(r'-+', '-', s).strip('-') or "category"
 
 
 
