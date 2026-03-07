@@ -54,12 +54,33 @@ def health_check(request):
 @permission_classes([AllowAny])
 def db_diagnostic(request):
     from django.db import connection
+    cursor = connection.cursor()
     tables = connection.introspection.table_names()
-    return Response({
+    
+    diagnostic = {
         "tables": tables,
-        "has_receiving": "api_receiving" in tables,
-        "has_receivingitem": "api_receivingitem" in tables,
-    })
+        "database": connection.settings_dict['NAME'],
+        "columns": {}
+    }
+    
+    # Check specific critical tables for new columns
+    check_tables = {
+        "api_product": ["discount_percentage", "price_inr", "price_usd"],
+        "api_customer": ["source", "joined_at"],
+        "api_user": ["address_line1", "phone", "role"]
+    }
+    
+    for table, cols in check_tables.items():
+        if table in tables:
+            actual_cols = [c[0] for c in connection.introspection.get_table_description(cursor, table)]
+            diagnostic["columns"][table] = {
+                "missing": [c for c in cols if c not in actual_cols],
+                "present": [c for c in cols if c in actual_cols]
+            }
+        else:
+            diagnostic["columns"][table] = "TABLE MISSING"
+            
+    return Response(diagnostic)
 
 class PushEndpoint(APIView):
     permission_classes = [IsAuthenticated]
