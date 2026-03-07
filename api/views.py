@@ -80,6 +80,11 @@ def db_diagnostic(request):
         else:
             diagnostic["columns"][table] = "TABLE MISSING"
             
+    # Check migrations
+    from django.db.migrations.recorder import MigrationRecorder
+    applied_migrations = MigrationRecorder.Migration.objects.filter(app='api').values_list('name', flat=True)
+    diagnostic["migrations"] = list(applied_migrations)
+            
     return Response(diagnostic)
 
 class PushEndpoint(APIView):
