@@ -1,3 +1,4 @@
+from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import User, Store
@@ -92,7 +93,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 from .models import (
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
     PaymentTerm, SupplierDocument, Invoice, InvoiceItem, Cheque, Category,
-    Product, Customer, Sale
+    Product, Customer, Sale, Employee, Attendance, Leave, Payroll, 
+    PerformanceReview, Receiving, ReceivingItem
 )
 
 

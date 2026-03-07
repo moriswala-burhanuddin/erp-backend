@@ -8,7 +8,7 @@ from .views import (
     PaymentTermViewSet, SupplierDocumentViewSet,
     ReceivingViewSet, ReceivingItemViewSet,
     InvoiceViewSet, InvoiceItemViewSet, ChequeViewSet,
-    ProductViewSet, SaleViewSet, CustomerViewSet
+    ProductViewSet, SaleViewSet, CustomerViewSet, register
 )
 
 
