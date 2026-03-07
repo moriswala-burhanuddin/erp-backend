@@ -71,6 +71,17 @@ class User(AbstractUser):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='users', null=True, blank=True)
     avatar = models.TextField(null=True, blank=True)
     is_driver = models.BooleanField(default=False)
+    
+    # Elegance Profile Fields
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    country = models.CharField(max_length=100, blank=True, null=True)
+    bio = models.TextField(blank=True, null=True)
+    address_line1 = models.CharField(max_length=255, blank=True, null=True)
+    address_line2 = models.CharField(max_length=255, blank=True, null=True)
+    state = models.CharField(max_length=100, blank=True, null=True)
+    pincode = models.CharField(max_length=20, blank=True, null=True)
+    
     device_id = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -81,6 +92,10 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.email} ({self.role})"
+    
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}".strip() or self.username
 
 class Account(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_acc_id)
@@ -130,6 +145,9 @@ class Customer(models.Model):
     phone = models.CharField(max_length=50)
     email = models.EmailField(null=True, blank=True)
     area = models.CharField(max_length=100, null=True, blank=True)
+    type = models.CharField(max_length=50, choices=[('retail', 'Retail'), ('wholesale', 'Wholesale')], default='retail')
+    status = models.CharField(max_length=50, choices=[('active', 'Active'), ('inactive', 'Inactive')], default='active')
+    source = models.CharField(max_length=50, default='POS') # POS, Online, etc.
     credit_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_purchases = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='customers')
@@ -665,6 +683,40 @@ class Review(models.Model):
 
     def __str__(self):
         return f"Review by {self.user_name} ({self.rating} stars)"
+
+class ProductImage(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=lambda: generate_id('pimg'))
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
+    image = models.TextField(null=True, blank=True) # URL or Base64
+    is_thumbnail = models.BooleanField(default=False)
+
+class KeyFeature(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=lambda: generate_id('feat'))
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='features')
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+
+class Cart(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_id)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='carts', null=True, blank=True) # For logged-in users
+    session_key = models.CharField(max_length=40, null=True, blank=True, unique=True) # For anonymous users
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Cart {self.id} (User: {self.user.username if self.user else 'Anonymous'})"
+
+class CartItem(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_id)
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=10, decimal_places=3, default=1)
+    price_at_time = models.DecimalField(max_digits=12, decimal_places=2) # Snapshot of price when added to cart
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.quantity} x {self.product.name} in Cart {self.cart.id}"
 
 class Feedback(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_id)

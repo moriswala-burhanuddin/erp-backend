@@ -103,6 +103,8 @@ class PushEndpoint(APIView):
             'employees',
             'payroll',
             'performance_reviews',
+            'product_images',
+            'key_features',
         ]
 
 
@@ -778,32 +780,23 @@ class ProductViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny] # Allow website to fetch products
 
     def get_queryset(self):
+        from django.db.models import Q
+        qs = Product.objects.filter(is_deleted=False).select_related('category', 'store').prefetch_related('images', 'features')
+        
         store_id = self.request.query_params.get('store_id')
         sku = self.request.query_params.get('sku')
         category_slug = self.request.query_params.get('category__slug')
         search = self.request.query_params.get('search')
-        
-        qs = Product.objects.filter(is_deleted=False).select_related('category', 'store')
         
         if store_id:
             qs = qs.filter(store_id=store_id)
         if sku:
             qs = qs.filter(sku=sku)
         if category_slug:
-            # Match category by name (case-insensitive) as a fallback for slug
-            # Since we generate slug from name in serializer: name.lower().replace(' ', '-')
-            # We reverse it roughly here for filtering
-            cat_name = category_slug.replace('-', ' ')
-            qs = qs.filter(category__name__icontains=cat_name)
-            
+            qs = qs.filter(Q(category__name__iexact=category_slug.replace('-', ' ')) | Q(category__id=category_slug))
         if search:
-            from django.db.models import Q
-            qs = qs.filter(
-                Q(name__icontains=search) | 
-                Q(description__icontains=search) | 
-                Q(sku__icontains=search) |
-                Q(brand__icontains=search)
-            )
+            qs = qs.filter(Q(name__icontains=search) | Q(sku__icontains=search) | Q(description__icontains=search) | Q(brand__icontains=search))
+            
         return qs.order_by('-updated_at')
 
 class CustomerViewSet(viewsets.ModelViewSet):
@@ -942,6 +935,13 @@ class SaleViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_profile(request):
+    from .serializers import UserProfileSerializer
+    serializer = UserProfileSerializer(request.user)
+    return Response(serializer.data)
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -954,8 +954,9 @@ def register(request):
         try:
             store = Store.objects.first()
             if store:
+                # Map Elegance data to ERP Customer
                 Customer.objects.create(
-                    name=user.get_full_name() or user.username,
+                    name=request.data.get('full_name') or user.get_full_name() or user.username,
                     email=user.email,
                     phone=request.data.get('phone', ''),
                     type='retail',
@@ -990,3 +991,65 @@ class FeedbackViewSet(viewsets.ModelViewSet):
     queryset = Feedback.objects.all().order_by('-created_at')
     serializer_class = FeedbackSerializer
     permission_classes = [AllowAny] # Allow website visitors to submit feedback
+
+from .models import Cart, CartItem
+from .serializers import CartSerializer, CartItemSerializer
+
+class CartViewSet(viewsets.ViewSet):
+    permission_classes = [AllowAny]
+
+    def _get_cart(self, request):
+        if request.user.is_authenticated:
+            cart, _ = Cart.objects.get_or_create(user=request.user)
+            return cart
+        else:
+            session_key = request.headers.get('x-cart-session')
+            if not session_key:
+                return None
+            cart, _ = Cart.objects.get_or_create(session_key=session_key)
+            return cart
+
+    def list(self, request):
+        cart = self._get_cart(request)
+        if not cart:
+            return Response({"items": [], "total_price": 0})
+        serializer = CartSerializer(cart)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['POST'])
+    def add_item(self, request):
+        cart = self._get_cart(request)
+        if not cart:
+            return Response({"error": "No session provided"}, status=400)
+            
+        product_id = request.data.get('product_id')
+        quantity = Decimal(str(request.data.get('quantity', 1)))
+        
+        product = get_object_or_404(Product, id=product_id)
+        
+        item, created = CartItem.objects.get_or_create(
+            cart=cart, 
+            product=product,
+            defaults={'price_at_time': product.selling_price, 'quantity': 0}
+        )
+        item.quantity += quantity
+        item.price_at_time = product.selling_price # Update to current price
+        item.save()
+        
+        return Response(CartSerializer(cart).data)
+
+    @action(detail=False, methods=['POST'])
+    def remove_item(self, request):
+        cart = self._get_cart(request)
+        if not cart: return Response(status=400)
+        
+        product_id = request.data.get('product_id')
+        CartItem.objects.filter(cart=cart, product_id=product_id).delete()
+        return Response(CartSerializer(cart).data)
+
+    @action(detail=False, methods=['POST'])
+    def clear(self, request):
+        cart = self._get_cart(request)
+        if cart:
+            cart.items.all().delete()
+        return Response({"status": "cleared"})

@@ -58,13 +58,31 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
+class UserProfileSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = (
+            'id', 'username', 'email', 'first_name', 'last_name', 'full_name', 
+            'role', 'store', 'avatar', 'phone', 'city', 'country', 'bio', 
+            'address_line1', 'address_line2', 'state', 'pincode'
+        )
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip() or obj.username
+
+
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     full_name = serializers.CharField(required=False)
 
     class Meta:
         model = User
-        fields = ('email', 'password', 'username', 'role', 'full_name')
+        fields = (
+            'email', 'password', 'username', 'role', 'full_name', 
+            'phone', 'city', 'country', 'address_line1', 'state', 'pincode'
+        )
 
     def create(self, validated_data):
         full_name = validated_data.pop('full_name', '')
@@ -76,8 +94,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
         
         # Ensure username exists (fallback to email prefix)
-        username = validated_data.get('username')
-        if not username:
+        if not validated_data.get('username'):
             validated_data['username'] = validated_data['email'].split('@')[0]
             
         user = User.objects.create(
@@ -204,11 +221,25 @@ class InvoiceSerializer(serializers.ModelSerializer):
         model = Invoice
         fields = '__all__'
 
+class ProductImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductImage
+        fields = ['id', 'image', 'is_thumbnail']
+
+class KeyFeatureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KeyFeature
+        fields = ['id', 'title', 'description']
+
 class ProductSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     category_id = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all(), source='category', write_only=True, required=False
     )
+    images = ProductImageSerializer(many=True, read_only=True)
+    features = KeyFeatureSerializer(many=True, read_only=True)
+    
+    # Elegance Frontend Compatibility
     title = serializers.CharField(source='name', read_only=True)
     price = serializers.DecimalField(source='selling_price', max_digits=10, decimal_places=2, read_only=True)
     price_inr = serializers.DecimalField(source='selling_price', max_digits=10, decimal_places=2, read_only=True)
@@ -221,7 +252,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'id', 'name', 'title', 'sku', 'category', 'category_id', 
             'selling_price', 'price', 'price_inr', 'price_usd', 
             'discount_percentage', 'purchase_price', 'quantity', 
-            'image', 'description', 'unit', 'brand', 'barcode', 'tax_slab'
+            'image', 'images', 'description', 'features', 'unit', 'brand', 'barcode', 'tax_slab'
         ]
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -234,7 +265,7 @@ class SaleSerializer(serializers.ModelSerializer):
         model = Sale
         fields = '__all__'
 
-from .models import Review, Feedback
+from .models import Review, Feedback, Cart, CartItem
 
 class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
@@ -245,3 +276,23 @@ class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = Feedback
         fields = '__all__'
+
+class CartItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_image = serializers.CharField(source='product.image', read_only=True)
+    subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    
+    class Meta:
+        model = CartItem
+        fields = ['id', 'product', 'product_name', 'product_image', 'quantity', 'price_at_time', 'subtotal']
+
+class CartSerializer(serializers.ModelSerializer):
+    items = CartItemSerializer(many=True, read_only=True)
+    total_price = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Cart
+        fields = ['id', 'user', 'session_key', 'items', 'total_price', 'updated_at']
+        
+    def get_total_price(self, obj):
+        return sum(item.quantity * item.price_at_time for item in obj.items.all())

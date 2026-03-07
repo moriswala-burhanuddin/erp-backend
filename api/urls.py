@@ -9,7 +9,7 @@ from .views import (
     ReceivingViewSet, ReceivingItemViewSet,
     InvoiceViewSet, InvoiceItemViewSet, ChequeViewSet,
     ProductViewSet, SaleViewSet, CustomerViewSet, register, CategoryViewSet,
-    ReviewViewSet, FeedbackViewSet
+    ReviewViewSet, FeedbackViewSet, CartViewSet, get_profile
 )
 
 from .serializers import CustomTokenObtainPairView
@@ -38,6 +38,7 @@ router.register(r'sales', SaleViewSet, basename='sale')
 router.register(r'customers', CustomerViewSet, basename='customer')
 router.register(r'reviews', ReviewViewSet, basename='review')
 router.register(r'feedback', FeedbackViewSet, basename='feedback')
+router.register(r'store/cart', CartViewSet, basename='cart')
 
 
 urlpatterns = [
@@ -49,5 +50,6 @@ urlpatterns = [
     # Auth
     path('auth/login', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/register', register, name='register'),
+    path('auth/profile/', get_profile, name='get_profile'),
     path('auth/refresh', TokenRefreshView.as_view(), name='token_refresh'),
 ] + router.urls
