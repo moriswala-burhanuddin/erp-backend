@@ -957,3 +957,17 @@ def register(request):
             }
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+from .models import Review, Feedback
+from .serializers import ReviewSerializer, FeedbackSerializer
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    queryset = Review.objects.all().order_by('-created_at')
+    serializer_class = ReviewSerializer
+    permission_classes = [AllowAny] # Allow reading reviews publicly, creating publicly?
+    # TODO: May want to restrict creating to authenticated or specific conditions
+
+class FeedbackViewSet(viewsets.ModelViewSet):
+    queryset = Feedback.objects.all().order_by('-created_at')
+    serializer_class = FeedbackSerializer
+    permission_classes = [AllowAny] # Allow website visitors to submit feedback

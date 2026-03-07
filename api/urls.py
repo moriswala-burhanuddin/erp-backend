@@ -8,9 +8,9 @@ from .views import (
     PaymentTermViewSet, SupplierDocumentViewSet,
     ReceivingViewSet, ReceivingItemViewSet,
     InvoiceViewSet, InvoiceItemViewSet, ChequeViewSet,
-    ProductViewSet, SaleViewSet, CustomerViewSet, register
+    ProductViewSet, SaleViewSet, CustomerViewSet, register, CategoryViewSet,
+    ReviewViewSet, FeedbackViewSet
 )
-
 
 from .serializers import CustomTokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -32,9 +32,12 @@ router.register(r'receiving-items', ReceivingItemViewSet, basename='receiving-it
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'invoice-items', InvoiceItemViewSet, basename='invoice-item')
 router.register(r'cheques', ChequeViewSet, basename='cheque')
+router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'products', ProductViewSet, basename='product')
 router.register(r'sales', SaleViewSet, basename='sale')
 router.register(r'customers', CustomerViewSet, basename='customer')
+router.register(r'reviews', ReviewViewSet, basename='review')
+router.register(r'feedback', FeedbackViewSet, basename='feedback')
 
 
 urlpatterns = [

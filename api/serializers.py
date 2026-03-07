@@ -197,10 +197,24 @@ class InvoiceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ProductSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source='category.name', read_only=True)
+    category = CategorySerializer(read_only=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(), source='category', write_only=True, required=False
+    )
+    title = serializers.CharField(source='name', read_only=True)
+    price = serializers.DecimalField(source='selling_price', max_digits=10, decimal_places=2, read_only=True)
+    price_inr = serializers.DecimalField(source='selling_price', max_digits=10, decimal_places=2, read_only=True)
+    price_usd = serializers.DecimalField(source='selling_price', max_digits=10, decimal_places=2, read_only=True)
+    discount_percentage = serializers.IntegerField(default=0, read_only=True)
+    
     class Meta:
         model = Product
-        fields = '__all__'
+        fields = [
+            'id', 'name', 'title', 'sku', 'category', 'category_id', 
+            'selling_price', 'price', 'price_inr', 'price_usd', 
+            'discount_percentage', 'purchase_price', 'quantity', 
+            'image', 'description', 'unit', 'brand', 'barcode', 'tax_slab'
+        ]
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -212,3 +226,14 @@ class SaleSerializer(serializers.ModelSerializer):
         model = Sale
         fields = '__all__'
 
+from .models import Review, Feedback
+
+class ReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = '__all__'
+
+class FeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feedback
+        fields = '__all__'

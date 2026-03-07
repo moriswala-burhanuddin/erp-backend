@@ -105,6 +105,8 @@ class Category(models.Model):
 class Product(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_prod_id)
     name = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+    image = models.TextField(null=True, blank=True) # URL or Base64
     sku = models.CharField(max_length=100)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     selling_price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -645,3 +647,34 @@ class Cheque(models.Model):
 
     def __str__(self):
         return f"Cheque {self.cheque_number} - {self.party_name} ({self.status})"
+
+# ──────────────────────────────────────────────────────────────
+# E-COMMERCE MODELS (Elegance Website Integration)
+# ──────────────────────────────────────────────────────────────
+
+class Review(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_id)
+    user_name = models.CharField(max_length=255)
+    user_email = models.EmailField(null=True, blank=True)
+    product_id = models.CharField(max_length=50, null=True, blank=True) 
+    rating = models.IntegerField(default=5)
+    comment = models.TextField()
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Review by {self.user_name} ({self.rating} stars)"
+
+class Feedback(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_id)
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    subject = models.CharField(max_length=255)
+    message = models.TextField()
+    rating = models.IntegerField(default=5) # For general satisfaction
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Feedback from {self.name}: {self.subject}"
+
