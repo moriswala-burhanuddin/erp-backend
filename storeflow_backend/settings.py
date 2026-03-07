@@ -31,6 +31,11 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv())
 # CORS Configuration
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=True, cast=bool)
 
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-cart-session',
+]
+
 
 # Application definition
 
