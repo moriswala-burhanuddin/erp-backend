@@ -1,6 +1,6 @@
-from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
+from .models import User, Store
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -57,10 +57,42 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    full_name = serializers.CharField(required=False)
+
+    class Meta:
+        model = User
+        fields = ('email', 'password', 'username', 'role', 'full_name')
+
+    def create(self, validated_data):
+        full_name = validated_data.pop('full_name', '')
+        password = validated_data.pop('password')
+        
+        # Split full_name into first and last if possible
+        name_parts = full_name.split(' ')
+        first_name = name_parts[0]
+        last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
+        
+        # Ensure username exists (fallback to email prefix)
+        username = validated_data.get('username')
+        if not username:
+            validated_data['username'] = validated_data['email'].split('@')[0]
+            
+        user = User.objects.create(
+            first_name=first_name,
+            last_name=last_name,
+            **validated_data
+        )
+        user.set_password(password)
+        user.save()
+        return user
+
+
 from .models import (
-    Employee, Attendance, Leave, Payroll, PerformanceReview, Store, User, 
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
-    PaymentTerm, SupplierDocument, Invoice, InvoiceItem, Cheque, Category
+    PaymentTerm, SupplierDocument, Invoice, InvoiceItem, Cheque, Category,
+    Product, Customer, Sale
 )
 
 
@@ -160,5 +192,21 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Invoice
+        fields = '__all__'
+
+class ProductSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    class Meta:
+        model = Product
+        fields = '__all__'
+
+class CustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customer
+        fields = '__all__'
+
+class SaleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Sale
         fields = '__all__'
 

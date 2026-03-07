@@ -162,6 +162,7 @@ class Sale(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='sales')
+    source = models.CharField(max_length=50, default='POS') # POS, Online, etc.
     date = models.DateTimeField()
     quotation_id = models.CharField(max_length=50, null=True, blank=True)
     device_id = models.CharField(max_length=50, null=True, blank=True)

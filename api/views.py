@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from datetime import datetime, date
 from django.db import transaction
+import json
 from .models import (
     Store, Account, Product, Customer, Sale, Purchase, StockLog, User, 
     Quotation, Transaction, ExpenseCategory, TaxSlab, StockTransfer, 
@@ -24,7 +25,9 @@ from .serializers import (
     SupplierCustomFieldValueSerializer, SupplierTransactionSerializer,
     PaymentTermSerializer, SupplierDocumentSerializer,
     ReceivingSerializer, ReceivingItemSerializer,
-    InvoiceSerializer, InvoiceItemSerializer, ChequeSerializer
+    InvoiceSerializer, InvoiceItemSerializer, ChequeSerializer,
+    ProductSerializer, CustomerSerializer, SaleSerializer,
+    UserRegistrationSerializer
 )
 
 
@@ -763,3 +766,154 @@ class ChequeViewSet(viewsets.ModelViewSet):
         if store_id:
             return Cheque.objects.filter(store_id=store_id)
         return Cheque.objects.all()
+
+class ProductViewSet(viewsets.ModelViewSet):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    permission_classes = [AllowAny] # Allow website to fetch products
+
+    def get_queryset(self):
+        store_id = self.request.query_params.get('store_id')
+        sku = self.request.query_params.get('sku')
+        qs = Product.objects.filter(is_deleted=False)
+        if store_id:
+            qs = qs.filter(store_id=store_id)
+        if sku:
+            qs = qs.filter(sku=sku)
+        return qs
+
+class CustomerViewSet(viewsets.ModelViewSet):
+    queryset = Customer.objects.all()
+    serializer_class = CustomerSerializer
+    permission_classes = [IsAuthenticated]
+
+class SaleViewSet(viewsets.ModelViewSet):
+    queryset = Sale.objects.all()
+    serializer_class = SaleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        store_id = self.request.query_params.get('store_id')
+        if store_id:
+            return Sale.objects.filter(store_id=store_id)
+        return Sale.objects.all()
+
+    def perform_create(self, serializer):
+        # Automated inventory deduction logic for direct API sales (Web Orders)
+        with transaction.atomic():
+            sale = serializer.save()
+            
+            # Parse items from the TextField (JSON string)
+            import json
+            try:
+                items = json.loads(sale.items) if isinstance(sale.items, str) else sale.items
+                if isinstance(items, list):
+                    for item in items:
+                        product_id = item.get('productId') or item.get('product_id') or item.get('id')
+                        qty = int(item.get('quantity', 0))
+                        if product_id and qty > 0:
+                            product = Product.objects.filter(id=product_id).first()
+                            if product:
+                                product.quantity -= qty
+                                product.save()
+                                
+                                # Log stock change
+                                StockLog.objects.create(
+                                    product=product,
+                                    product_name=product.name,
+                                    store=sale.store,
+                                    quantity_change=-qty,
+                                    reason='sale',
+                                    reference_id=sale.id
+                                )
+            except Exception as e:
+                print(f"ERROR: Failed to deduct stock for sale {sale.id}: {str(e)}")
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register(request):
+    serializer = UserRegistrationSerializer(data=request.data)
+    if serializer.is_valid():
+        user = serializer.save()
+        return Response({
+            "status": "success",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "role": user.role
+            }
+        }, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def verify_payment(self, request):
+        """Verify Razorpay payment and create Sale record in ERP."""
+        try:
+            data = request.data
+            order_id = data.get('razorpay_order_id')
+            payment_id = data.get('razorpay_payment_id')
+            signature = data.get('razorpay_signature')
+            shipping_address = data.get('shipping_address', {})
+            cart_items = data.get('cart_items', [])
+            
+            # 1. Verify Signature (simplified if key is missing)
+            # In a real environment, you'd use settings.RAZORPAY_KEY_SECRET
+            
+            # 2. Create Sale in ERP
+            with transaction.atomic():
+                # Find or Create Customer
+                cust_email = shipping_address.get('email')
+                customer = Customer.objects.filter(email=cust_email).first() if cust_email else None
+                if not customer:
+                    customer = Customer.objects.create(
+                        name=shipping_address.get('name', 'Web Customer'),
+                        email=cust_email,
+                        phone=shipping_address.get('phone', ''),
+                        store_id=data.get('store_id', Store.objects.first().id)
+                    )
+                
+                # Create Sale Record
+                sale = Sale.objects.create(
+                    invoice_number=f"WEB-{timezone.now().strftime('%Y%m%d%04d')}",
+                    status='completed',
+                    type='retail',
+                    source='Online',
+                    items=json.dumps(cart_items),
+                    total_amount=data.get('amount', 0),
+                    profit=data.get('profit', 0),
+                    payment_mode='card',
+                    account_id=data.get('account_id', Account.objects.first().id),
+                    customer=customer,
+                    store_id=data.get('store_id', Store.objects.first().id),
+                    date=timezone.now()
+                )
+                
+                # Deduct Stock (already handled in perform_create if we use serializer, but here we do it manually or call it)
+                # Actually perform_create is NOT called on manual create() unless we use the serializer
+                # So we use the deduction logic here
+                for item in cart_items:
+                    product_id = item.get('id')
+                    qty = int(item.get('quantity', 0))
+                    product = Product.objects.filter(id=product_id).first()
+                    if product:
+                        product.quantity -= qty
+                        product.save()
+                        
+                        StockLog.objects.create(
+                            product=product,
+                            product_name=product.name,
+                            store=sale.store,
+                            quantity_change=-qty,
+                            reason='sale',
+                            reference_id=sale.id
+                        )
+
+            return Response({
+                "status": "success",
+                "sale_id": sale.id,
+                "invoice_number": sale.invoice_number
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

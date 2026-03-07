@@ -7,7 +7,8 @@ from .views import (
     SupplierCustomFieldValueViewSet, SupplierTransactionViewSet,
     PaymentTermViewSet, SupplierDocumentViewSet,
     ReceivingViewSet, ReceivingItemViewSet,
-    InvoiceViewSet, InvoiceItemViewSet, ChequeViewSet
+    InvoiceViewSet, InvoiceItemViewSet, ChequeViewSet,
+    ProductViewSet, SaleViewSet, CustomerViewSet
 )
 
 
@@ -31,6 +32,9 @@ router.register(r'receiving-items', ReceivingItemViewSet, basename='receiving-it
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'invoice-items', InvoiceItemViewSet, basename='invoice-item')
 router.register(r'cheques', ChequeViewSet, basename='cheque')
+router.register(r'products', ProductViewSet, basename='product')
+router.register(r'sales', SaleViewSet, basename='sale')
+router.register(r'customers', CustomerViewSet, basename='customer')
 
 
 urlpatterns = [
@@ -41,5 +45,6 @@ urlpatterns = [
     
     # Auth
     path('auth/login', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('auth/register', register, name='register'),
     path('auth/refresh', TokenRefreshView.as_view(), name='token_refresh'),
 ] + router.urls
