@@ -83,6 +83,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'email', 'password', 'username', 'role', 'full_name', 
             'phone', 'city', 'country', 'address_line1', 'state', 'pincode'
         )
+        extra_kwargs = {
+            'role': {'default': 'user'},
+            'username': {'required': False}
+        }
 
     def create(self, validated_data):
         full_name = validated_data.pop('full_name', '')
@@ -242,18 +246,26 @@ class ProductSerializer(serializers.ModelSerializer):
     # Elegance Frontend Compatibility
     title = serializers.CharField(source='name', read_only=True)
     price = serializers.DecimalField(source='selling_price', max_digits=10, decimal_places=2, read_only=True)
-    price_inr = serializers.DecimalField(source='selling_price', max_digits=10, decimal_places=2, read_only=True)
-    price_usd = serializers.DecimalField(source='selling_price', max_digits=10, decimal_places=2, read_only=True)
-    discount_percentage = serializers.IntegerField(default=0, read_only=True)
+    
+    # These now come from the model or we provide fallbacks
+    price_inr = serializers.SerializerMethodField()
+    price_usd = serializers.SerializerMethodField()
+    discount_percentage = serializers.IntegerField(required=False)
     
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'title', 'sku', 'category', 'category_id', 
-            'selling_price', 'price', 'price_inr', 'price_usd', 
-            'discount_percentage', 'purchase_price', 'quantity', 
-            'image', 'images', 'description', 'features', 'unit', 'brand', 'barcode', 'tax_slab'
+            'id', 'name', 'title', 'description', 'sku', 'category', 'category_id',
+            'selling_price', 'purchase_price', 'quantity', 'unit', 'brand', 'barcode',
+            'tax_slab', 'image', 'images', 'features', 'price', 'price_inr', 'price_usd',
+            'discount_percentage', 'updated_at'
         ]
+        
+    def get_price_inr(self, obj):
+        return obj.price_inr or obj.selling_price
+        
+    def get_price_usd(self, obj):
+        return obj.price_usd or obj.selling_price
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -278,13 +290,17 @@ class FeedbackSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CartItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(), source='product', write_only=True
+    )
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_image = serializers.CharField(source='product.image', read_only=True)
     subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     
     class Meta:
         model = CartItem
-        fields = ['id', 'product', 'product_name', 'product_image', 'quantity', 'price_at_time', 'subtotal']
+        fields = ['id', 'product', 'product_id', 'product_name', 'product_image', 'quantity', 'price_at_time', 'subtotal']
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)

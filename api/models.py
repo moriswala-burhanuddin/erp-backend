@@ -73,7 +73,7 @@ class User(AbstractUser):
         ('employee', 'Employee'),
         ('user', 'User'),
         ('super_admin', 'Super Admin')
-    ], default='staff')
+    ], default='user')
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='users', null=True, blank=True)
     avatar = models.TextField(null=True, blank=True)
     is_driver = models.BooleanField(default=False)
@@ -137,6 +137,12 @@ class Product(models.Model):
     unit = models.CharField(max_length=50, null=True, blank=True)
     brand = models.CharField(max_length=100, null=True, blank=True)
     barcode = models.CharField(max_length=100, null=True, blank=True)
+    
+    # Elegance Frontend Compatibility
+    discount_percentage = models.IntegerField(default=0)
+    price_inr = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    price_usd = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    
     tax_slab = models.ForeignKey('TaxSlab', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     last_used = models.DateTimeField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)

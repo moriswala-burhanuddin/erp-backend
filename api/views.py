@@ -961,6 +961,7 @@ def register(request):
             store = Store.objects.first()
             if store:
                 # Map Elegance data to ERP Customer
+                from django.utils import timezone
                 Customer.objects.create(
                     name=request.data.get('full_name') or user.get_full_name() or user.username,
                     email=user.email,
@@ -968,7 +969,8 @@ def register(request):
                     type='retail',
                     status='active',
                     source='Online',
-                    store=store
+                    store=store,
+                    joined_at=timezone.now()
                 )
                 customer_created = True
         except Exception as e:
