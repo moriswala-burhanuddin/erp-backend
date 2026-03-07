@@ -1,9 +1,13 @@
 import os
+import sys
 import django
 from django.db import connection
 
+# Add current directory to path so it can find storeflow_backend
+sys.path.append(os.getcwd())
+
 # Set up Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings') # Adjust 'backend' if your project renamed it
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'storeflow_backend.settings')
 django.setup()
 
 def repair():
