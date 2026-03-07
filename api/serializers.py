@@ -111,7 +111,7 @@ from .models import (
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
     PaymentTerm, SupplierDocument, Invoice, InvoiceItem, Cheque, Category,
     Product, Customer, Sale, Employee, Attendance, Leave, Payroll, 
-    PerformanceReview, Receiving, ReceivingItem
+    PerformanceReview, Receiving, ReceivingItem, ProductImage, KeyFeature
 )
 
 
