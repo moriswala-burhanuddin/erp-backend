@@ -27,7 +27,7 @@ from .serializers import (
     ReceivingSerializer, ReceivingItemSerializer,
     InvoiceSerializer, InvoiceItemSerializer, ChequeSerializer,
     ProductSerializer, CustomerSerializer, SaleSerializer,
-    UserRegistrationSerializer
+    UserRegistrationSerializer, CategorySerializer
 )
 
 
@@ -767,6 +767,11 @@ class ChequeViewSet(viewsets.ModelViewSet):
             return Cheque.objects.filter(store_id=store_id)
         return Cheque.objects.all()
 
+class CategoryViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [AllowAny]
+
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
@@ -829,22 +834,25 @@ class SaleViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 print(f"ERROR: Failed to deduct stock for sale {sale.id}: {str(e)}")
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def register(request):
-    serializer = UserRegistrationSerializer(data=request.data)
-    if serializer.is_valid():
-        user = serializer.save()
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def create_razorpay_order(self, request):
+        amount = request.data.get('amount', 0)
+        # Note: integration with razorpay package
+        # Since we might not have razorpay installed in the ERP backend, 
+        # we generate a stub or mockup for now that the frontend expects.
+        import time
+        order_id = f"order_{int(time.time())}"
+        
         return Response({
-            "status": "success",
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "username": user.username,
-                "role": user.role
-            }
-        }, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            "order_id": order_id,
+            "amount": amount,
+            "key_id": "rzp_test_stub_key",
+            "currency": "INR",
+            "description": "Elegance Store Order",
+            "user_name": request.user.first_name,
+            "user_email": request.user.email,
+            "user_contact": ""
+        })
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def verify_payment(self, request):
@@ -889,9 +897,6 @@ def register(request):
                     date=timezone.now()
                 )
                 
-                # Deduct Stock (already handled in perform_create if we use serializer, but here we do it manually or call it)
-                # Actually perform_create is NOT called on manual create() unless we use the serializer
-                # So we use the deduction logic here
                 for item in cart_items:
                     product_id = item.get('id')
                     qty = int(item.get('quantity', 0))
@@ -917,3 +922,38 @@ def register(request):
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register(request):
+    serializer = UserRegistrationSerializer(data=request.data)
+    if serializer.is_valid():
+        user = serializer.save()
+        
+        # Create a Customer record for this new user so they appear in the ERP
+        from .models import Customer, Store
+        try:
+            store = Store.objects.first()
+            if store:
+                Customer.objects.create(
+                    name=user.get_full_name() or user.username,
+                    email=user.email,
+                    phone=request.data.get('phone', ''),
+                    type='retail',
+                    status='active',
+                    source='Online',
+                    store=store
+                )
+        except Exception as e:
+            print(f"Failed to create Customer record for new user: {e}")
+
+        return Response({
+            "status": "success",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "role": user.role
+            }
+        }, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
