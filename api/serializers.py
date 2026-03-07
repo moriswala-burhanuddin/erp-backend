@@ -322,6 +322,5 @@ class CartSerializer(serializers.ModelSerializer):
     def get_total_price(self, obj):
         return sum(float(item.quantity) * float(item.price_at_time) for item in obj.items.all())
 
-    def get_count(self):
-        # Return total items in cart
-        return self.items.count() if hasattr(self, 'items') else 0
+    def get_count(self, obj):
+        return obj.items.count()
