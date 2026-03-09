@@ -946,24 +946,34 @@ class SaleViewSet(viewsets.ModelViewSet):
             signature = data.get('razorpay_signature')
             shipping_address = data.get('shipping_address', {})
             cart_items = data.get('cart_items', [])
+            amount_input = data.get('amount', 0)
             
-            # 1. Verify Signature (simplified if key is missing)
-            # In a real environment, you'd use settings.RAZORPAY_KEY_SECRET
-            
+            # 1. Basic Validation
+            if not cart_items:
+                return Response({"error": "Cart items missing"}, status=status.HTTP_400_BAD_REQUEST)
+
             # 2. Create Sale in ERP
             with transaction.atomic():
                 # Find or Create Customer
-                cust_email = shipping_address.get('email')
-                customer = Customer.objects.filter(email=cust_email).first() if cust_email else None
+                cust_email = shipping_address.get('email') or request.user.email
+                customer = Customer.objects.filter(email=cust_email).first()
+                
+                # Fetch or Create fallback Store/Account
                 first_store = Store.objects.first()
-                first_account = Account.objects.first()
+                if not first_store:
+                    first_store = Store.objects.create(name="Main Store", branch="Main")
+                
+                first_account = Account.objects.filter(type='cash').first() or Account.objects.first()
+                if not first_account:
+                    first_account = Account.objects.create(name="Main Cash", type='cash', balance=0)
                 
                 if not customer:
                     customer = Customer.objects.create(
-                        name=shipping_address.get('name', 'Web Customer'),
+                        name=shipping_address.get('name', request.user.get_full_name() or 'Web Customer'),
                         email=cust_email,
                         phone=shipping_address.get('phone', ''),
-                        store=first_store
+                        store=first_store,
+                        source='Online'
                     )
                 
                 # Create Sale Record
@@ -973,7 +983,8 @@ class SaleViewSet(viewsets.ModelViewSet):
                     type='retail',
                     source='Online',
                     items=json.dumps(cart_items),
-                    total_amount=data.get('amount', 0),
+                    subtotal=amount_input, # Assuming amount passed is subtotal
+                    total_amount=amount_input,
                     profit=data.get('profit', 0),
                     payment_mode='card',
                     account=first_account,
@@ -982,23 +993,34 @@ class SaleViewSet(viewsets.ModelViewSet):
                     date=timezone.now()
                 )
                 
+                # Create SalePayment Record (Requirement for many ERP views)
+                SalePayment.objects.create(
+                    sale=sale,
+                    payment_mode='card',
+                    amount=amount_input,
+                    account=first_account
+                )
+                
+                # Deduct Stock
                 for item in cart_items:
                     product_id = item.get('id')
                     qty = int(item.get('quantity', 0))
-                    product = Product.objects.filter(id=product_id).first()
-                    if product:
-                        product.quantity -= qty
-                        product.save()
-                        
-                        StockLog.objects.create(
-                            product=product,
-                            product_name=product.name,
-                            store=sale.store,
-                            quantity_change=-qty,
-                            reason='sale',
-                            reference_id=sale.id
-                        )
-
+                    if product_id and qty > 0:
+                        product = Product.objects.filter(id=product_id).first()
+                        if product:
+                            product.quantity -= qty
+                            product.save()
+                            
+                            StockLog.objects.create(
+                                product=product,
+                                product_name=product.name,
+                                store=sale.store,
+                                quantity_change=-qty,
+                                reason='sale',
+                                reference_id=sale.id
+                            )
+                
+            print(f"[SUCCESS] Web Order created for {cust_email}: {sale.invoice_number}")
             return Response({
                 "status": "success",
                 "sale_id": sale.id,
@@ -1006,7 +1028,11 @@ class SaleViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            import traceback
+            traceback.print_exc()
+            error_msg = f"Verification failed: {str(e)}"
+            print(f"[ERROR] {error_msg}")
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
