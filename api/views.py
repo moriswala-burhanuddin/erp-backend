@@ -43,6 +43,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
+import decimal
 from decimal import Decimal
 
 @api_view(['GET'])
@@ -1274,11 +1275,14 @@ class CartItemViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def _get_cart(self, request):
+        session_id = request.headers.get('X-Cart-Session') or request.headers.get('x-cart-session')
         if request.user.is_authenticated:
-            return Cart.objects.filter(user=request.user).first()
-        else:
-            session_key = request.headers.get('x-cart-session')
-            return Cart.objects.filter(session_key=session_key).first()
+            cart, _ = Cart.objects.get_or_create(user=request.user)
+            return cart
+        if session_id:
+            cart, _ = Cart.objects.get_or_create(session_key=session_id)
+            return cart
+        return None
 
     def get_queryset(self):
         cart = self._get_cart(self.request)
