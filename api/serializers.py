@@ -297,6 +297,9 @@ class SaleSerializer(serializers.ModelSerializer):
     
     items = serializers.SerializerMethodField()
     order_id = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    amount = serializers.SerializerMethodField()
+    created_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
@@ -321,12 +324,20 @@ class SaleSerializer(serializers.ModelSerializer):
 
     def get_order_id(self, obj):
         try:
-            # Check for OnlineOrder relationship
-            if hasattr(obj, 'online_order'):
+            if hasattr(obj, 'online_order') and obj.online_order:
                 return obj.online_order.order_id
         except:
             pass
         return obj.invoice_number
+
+    def get_currency(self, obj):
+        return getattr(obj, 'currency', 'INR')
+
+    def get_amount(self, obj):
+        return obj.total_amount
+
+    def get_created_at(self, obj):
+        return obj.date
 
 from .models import Review, Feedback, Cart, CartItem
 
@@ -344,7 +355,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     project = ProductSerializer(source='product', read_only=True)
     product_id = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(), source='product', write_only=True
+        queryset=Product.objects.all(), source='product', write_only=True, required=False
     )
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_image = serializers.CharField(source='product.image', read_only=True)

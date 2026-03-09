@@ -1294,7 +1294,12 @@ class CartItemViewSet(viewsets.ModelViewSet):
         cart = self._get_cart(self.request)
         if not cart:
             raise serializers.ValidationError("No cart session found")
-        serializer.save(cart=cart)
+        
+        # Ensure price_at_time is set from the product
+        product_id = self.request.data.get('product_id')
+        product = get_object_or_404(Product, id=product_id)
+        
+        serializer.save(cart=cart, product=product, price_at_time=product.selling_price or 0)
 
 class OnlineOrderViewSet(viewsets.ModelViewSet):
     serializer_class = OnlineOrderSerializer
