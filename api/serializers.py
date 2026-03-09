@@ -366,8 +366,15 @@ class OnlineOrderItemSerializer(serializers.ModelSerializer):
         model = OnlineOrderItem
         fields = '__all__'
 
+class OnlineReturnSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OnlineReturn
+        fields = '__all__'
+
 class OnlineOrderSerializer(serializers.ModelSerializer):
     web_items = OnlineOrderItemSerializer(many=True, read_only=True)
+    returns = OnlineReturnSerializer(many=True, read_only=True)
+    sale_invoice = serializers.CharField(source='sale.invoice_number', read_only=True, allow_null=True)
     
     class Meta:
         model = OnlineOrder

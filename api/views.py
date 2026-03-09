@@ -17,8 +17,9 @@ from .models import (
     GiftCard, SalePayment, WorkOrder, Delivery, DeliveryZone,
     Invoice, InvoiceItem, Cheque, Category,
     ProductImage, KeyFeature, Cart, CartItem, Review, Feedback,
-    OnlineOrder, OnlineOrderItem
+    OnlineOrder, OnlineOrderItem, OnlineReturn
 )
+from django.db.models import Sum, Count, F
 
 
 from .serializers import (
@@ -33,7 +34,7 @@ from .serializers import (
     UserRegistrationSerializer, CategorySerializer,
     ProductImageSerializer, KeyFeatureSerializer, CartSerializer, CartItemSerializer,
     ReviewSerializer, FeedbackSerializer,
-    OnlineOrderSerializer, OnlineOrderItemSerializer
+    OnlineOrderSerializer, OnlineOrderItemSerializer, OnlineReturnSerializer
 )
 
 
@@ -1006,6 +1007,20 @@ class SaleViewSet(viewsets.ModelViewSet):
                         source='Online'
                     )
                 
+                # Calculate Profit on Backend for accuracy
+                total_profit = Decimal('0.00')
+                for item in cart_items:
+                    p_id = item.get('id')
+                    try:
+                        p_obj = Product.objects.filter(id=p_id).first()
+                        if p_obj:
+                            item_price = Decimal(str(item.get('price', 0)))
+                            item_cost = p_obj.purchase_price or Decimal('0.00')
+                            item_qty = Decimal(str(item.get('quantity', 1)))
+                            total_profit += (item_price - item_cost) * item_qty
+                    except:
+                        pass
+
                 # Create Sale Record
                 print("Creating Sale record...")
                 sale = Sale.objects.create(
@@ -1016,7 +1031,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                     items=json.dumps(cart_items),
                     subtotal=amount_input,
                     total_amount=amount_input,
-                    profit=data.get('profit', 0),
+                    profit=total_profit,
                     payment_mode='card',
                     account=first_account,
                     customer=customer,
@@ -1283,6 +1298,52 @@ class OnlineOrderViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff:
+        if user.is_staff or user.role in ['admin', 'super_admin']:
             return OnlineOrder.objects.all().order_by('-created_at')
         return OnlineOrder.objects.filter(user_email=user.email).order_by('-created_at')
+
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        order = self.get_object()
+        status_val = request.data.get('status')
+        if status_val:
+            order.status = status_val
+            order.save()
+            return Response({'status': 'updated'})
+        return Response({'error': 'status required'}, status=400)
+
+    @action(detail=True, methods=['post'])
+    def add_tracking(self, request, pk=None):
+        order = self.get_object()
+        order.courier_name = request.data.get('courier_name', order.courier_name)
+        order.tracking_number = request.data.get('tracking_number', order.tracking_number)
+        order.shipping_method = request.data.get('shipping_method', order.shipping_method)
+        if request.data.get('estimated_delivery_date'):
+            order.estimated_delivery_date = request.data.get('estimated_delivery_date')
+        order.status = 'Shipped'
+        order.save()
+        return Response({'status': 'tracking added'})
+
+class OnlineReturnViewSet(viewsets.ModelViewSet):
+    queryset = OnlineReturn.objects.all()
+    serializer_class = OnlineReturnSerializer
+    permission_classes = [IsAuthenticated]
+
+class OnlineReportViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        # Revenue and Top Selling Products (Online only)
+        total_revenue = OnlineOrder.objects.filter(status='Delivered').aggregate(total=Sum('amount'))['total'] or 0
+        total_orders = OnlineOrder.objects.count()
+        
+        top_products = OnlineOrderItem.objects.values('product_name')\
+            .annotate(total_qty=Sum('quantity'))\
+            .order_by('-total_qty')[:5]
+            
+        return Response({
+            'revenue': total_revenue,
+            'orders': total_orders,
+            'top_products': top_products
+        })
