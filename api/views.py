@@ -898,6 +898,12 @@ class SaleViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def create_razorpay_order(self, request):
         amount = request.data.get('amount', 0)
+        # Handle cases where amount might be passed as string from frontend
+        try:
+            amount = float(amount)
+        except (TypeError, ValueError):
+            amount = 0
+
         # Note: integration with razorpay package
         # Since we might not have razorpay installed in the ERP backend, 
         # we generate a stub or mockup for now that the frontend expects.
@@ -987,10 +993,17 @@ class SaleViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['GET'])
+@api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
 def get_profile(request):
     from .serializers import UserProfileSerializer
+    if request.method == 'PUT':
+        serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     serializer = UserProfileSerializer(request.user)
     return Response(serializer.data)
 

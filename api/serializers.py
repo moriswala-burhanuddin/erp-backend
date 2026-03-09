@@ -59,7 +59,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    full_name = serializers.SerializerMethodField()
+    full_name = serializers.CharField(required=False)
     
     class Meta:
         model = User
@@ -71,6 +71,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
+
+    def update(self, instance, validated_data):
+        if 'full_name' in validated_data:
+            full_name = validated_data.pop('full_name')
+            name_parts = full_name.split(' ', 1)
+            instance.first_name = name_parts[0]
+            instance.last_name = name_parts[1] if len(name_parts) > 1 else ''
+        
+        return super().update(instance, validated_data)
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
