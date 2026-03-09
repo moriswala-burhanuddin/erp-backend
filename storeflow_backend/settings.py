@@ -150,3 +150,17 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Razorpay Configuration
+RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='rzp_test_RkIqS6NBhGBvNP')
+RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='R6NhkQ1ajPrZOFbP694hZEcD')
+
+# Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='fitprojectsbymoris@gmail.com')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='fseu zdst suny uxaq')
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = 'FitProjects By Moris <fitprojectsbymoris@gmail.com>'
+ADMINS = [('Moris', 'fitprojectsbymoris@gmail.com')]

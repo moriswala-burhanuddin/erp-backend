@@ -910,10 +910,11 @@ class SaleViewSet(viewsets.ModelViewSet):
         import time
         order_id = f"order_{int(time.time())}"
         
+        from django.conf import settings
         return Response({
             "order_id": order_id,
             "amount": amount,
-            "key_id": "rzp_test_stub_key",
+            "key_id": settings.RAZORPAY_KEY_ID,
             "currency": "INR",
             "description": "Elegance Store Order",
             "user_name": request.user.get_full_name() if request.user.is_authenticated else "Guest",
