@@ -1056,14 +1056,14 @@ class SaleViewSet(viewsets.ModelViewSet):
                         product_id=item.get('id'),
                         product_name=item.get('name') or item.get('title', 'Unknown Product'),
                         price=Decimal(str(item.get('price', 0))),
-                        quantity=int(item.get('quantity', 1))
+                        quantity=int(float(item.get('quantity', 1)))
                     )
                 
                 # Deduct Stock
                 print("Updating stock...")
                 for item in cart_items:
                     product_id = item.get('id')
-                    qty = int(item.get('quantity', 0))
+                    qty = int(float(item.get('quantity', 0)))
                     if product_id and qty > 0:
                         product = Product.objects.filter(id=product_id).first()
                         if product:
