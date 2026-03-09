@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status, serializers, viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from datetime import datetime, date
+from django.utils import timezone
 from django.db import transaction
 import json
 from .models import (
@@ -859,10 +860,26 @@ class SaleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        user = self.request.user
         store_id = self.request.query_params.get('store_id')
+        
+        if not user.is_authenticated:
+            return Sale.objects.none()
+
+        # Super Admins and Admins can see everything
+        if user.role in ['super_admin', 'admin'] or user.is_staff:
+            qs = Sale.objects.all()
+        # Managers etc see their store's sales
+        elif user.role in ['hr_manager', 'sales_manager', 'inventory_manager', 'accountant'] and user.store:
+            qs = Sale.objects.filter(store=user.store)
+        # Regular users (Web Customers) see only their own orders by email
+        else:
+            qs = Sale.objects.filter(customer__email=user.email)
+            
         if store_id:
-            return Sale.objects.filter(store_id=store_id)
-        return Sale.objects.all()
+            qs = qs.filter(store_id=store_id)
+            
+        return qs.order_by('-date')
 
     def perform_create(self, serializer):
         # Automated inventory deduction logic for direct API sales (Web Orders)
