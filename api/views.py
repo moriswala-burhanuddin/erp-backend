@@ -941,8 +941,12 @@ class SaleViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def verify_payment(self, request):
         """Verify Razorpay payment and create Sale record in ERP."""
+        print("\n=== VERIFY PAYMENT START ===")
+        print(f"User: {request.user.email}")
         try:
             data = request.data
+            print(f"Payload: {json.dumps(data, indent=2)}")
+            
             order_id = data.get('razorpay_order_id')
             payment_id = data.get('razorpay_payment_id')
             signature = data.get('razorpay_signature')
@@ -952,21 +956,26 @@ class SaleViewSet(viewsets.ModelViewSet):
             
             # 1. Basic Validation
             if not cart_items:
+                print("[ERROR] Cart items missing")
                 return Response({"error": "Cart items missing"}, status=status.HTTP_400_BAD_REQUEST)
 
             # 2. Create Sale in ERP
             with transaction.atomic():
+                print("Transaction started...")
                 # Find or Create Customer
                 cust_email = shipping_address.get('email') or request.user.email
                 customer = Customer.objects.filter(email=cust_email).first()
+                print(f"Customer Found: {customer.id if customer else 'None'}")
                 
                 # Fetch or Create fallback Store/Account
                 first_store = Store.objects.first()
                 if not first_store:
-                    first_store = Store.objects.create(name="Main Store", branch="Main")
+                    print("Creating fallback store...")
+                    first_store = Store.objects.create(name="Hardware Central [Main Branch]", branch="Main")
                 
                 first_account = Account.objects.filter(type='cash').first() or Account.objects.first()
                 if not first_account:
+                    print("Creating fallback account...")
                     first_account = Account.objects.create(
                         name="Main Cash", 
                         type='cash', 
@@ -975,8 +984,9 @@ class SaleViewSet(viewsets.ModelViewSet):
                     )
                 
                 if not customer:
+                    print(f"Creating new customer for {cust_email}...")
                     customer = Customer.objects.create(
-                        name=shipping_address.get('name', request.user.get_full_name() or 'Web Customer'),
+                        name=shipping_address.get('name', request.user.full_name or 'Web Customer'),
                         email=cust_email,
                         phone=shipping_address.get('phone', ''),
                         store=first_store,
@@ -984,6 +994,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                     )
                 
                 # Create Sale Record
+                print("Creating Sale record...")
                 sale = Sale.objects.create(
                     invoice_number=f"WEB-{timezone.now().strftime('%Y%m%d%H%M%S')}",
                     status='completed',
@@ -999,8 +1010,9 @@ class SaleViewSet(viewsets.ModelViewSet):
                     store=first_store,
                     date=timezone.now()
                 )
+                print(f"Sale created: {sale.id}")
                 
-                # Create SalePayment Record (Requirement for many ERP views)
+                # Create SalePayment Record
                 SalePayment.objects.create(
                     sale=sale,
                     payment_mode='card',
@@ -1008,7 +1020,8 @@ class SaleViewSet(viewsets.ModelViewSet):
                     account=first_account
                 )
 
-                # Create OnlineOrder record for website tracking
+                # Create OnlineOrder record
+                print("Creating OnlineOrder record...")
                 oo = OnlineOrder.objects.create(
                     user_email=cust_email,
                     order_id=order_id or f"WEB-{sale.id}",
@@ -1016,25 +1029,27 @@ class SaleViewSet(viewsets.ModelViewSet):
                     amount=amount_input,
                     sale=sale,
                     status='Processing',
-                    full_name=shipping_address.get('name', request.user.get_full_name() or 'Web Customer'),
+                    full_name=shipping_address.get('name', request.user.full_name or 'Web Customer'),
                     phone=shipping_address.get('phone', ''),
-                    address=shipping_address.get('address', ''),
+                    address=shipping_address.get('address', shipping_address.get('address_line1', '')),
                     city=shipping_address.get('city', ''),
                     state=shipping_address.get('state', ''),
                     pincode=shipping_address.get('pincode', '')
                 )
                 
                 # Create OnlineOrderItems
+                print("Creating OnlineOrderItems...")
                 for item in cart_items:
                     OnlineOrderItem.objects.create(
                         order=oo,
                         product_id=item.get('id'),
-                        product_name=item.get('title', 'Unknown Product'),
+                        product_name=item.get('name') or item.get('title', 'Unknown Product'),
                         price=Decimal(str(item.get('price', 0))),
                         quantity=int(item.get('quantity', 1))
                     )
                 
                 # Deduct Stock
+                print("Updating stock...")
                 for item in cart_items:
                     product_id = item.get('id')
                     qty = int(item.get('quantity', 0))
@@ -1053,7 +1068,19 @@ class SaleViewSet(viewsets.ModelViewSet):
                                 reference_id=sale.id
                             )
                 
-            print(f"[SUCCESS] Web Order created for {cust_email}: {sale.invoice_number}")
+            print(f"=== VERIFY PAYMENT SUCCESS: {sale.invoice_number} ===")
+            return Response({
+                "status": "success",
+                "sale_id": sale.id,
+                "invoice_number": sale.invoice_number
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            error_msg = f"Verification failed: {str(e)}"
+            print(f"=== VERIFY PAYMENT ERROR: {error_msg} ===")
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
             return Response({
                 "status": "success",
                 "sale_id": sale.id,
