@@ -895,7 +895,8 @@ class SaleViewSet(viewsets.ModelViewSet):
                 if isinstance(items, list):
                     for item in items:
                         product_id = item.get('productId') or item.get('product_id') or item.get('id')
-                        qty = int(item.get('quantity', 0))
+                        qty = int(float(item.get('quantity', 0)))
+                        print(f"DEBUG: Stock deduction for {item.get('id')}, qty={qty}")
                         if product_id and qty > 0:
                             product = Product.objects.filter(id=product_id).first()
                             if product:
@@ -953,6 +954,7 @@ class SaleViewSet(viewsets.ModelViewSet):
             shipping_address = data.get('shipping_address', {})
             cart_items = data.get('cart_items', [])
             amount_input = data.get('amount', 0)
+            print(f"DEBUG: amount_input='{amount_input}' (type: {type(amount_input)})")
             
             # 1. Basic Validation
             if not cart_items:
@@ -1051,19 +1053,24 @@ class SaleViewSet(viewsets.ModelViewSet):
                 # Create OnlineOrderItems
                 print("Creating OnlineOrderItems...")
                 for item in cart_items:
+                    raw_qty = item.get('quantity', 1)
+                    parsed_qty = int(float(raw_qty))
+                    print(f"DEBUG: item={item.get('id')}, raw_qty='{raw_qty}', parsed_qty={parsed_qty}")
                     OnlineOrderItem.objects.create(
                         order=oo,
                         product_id=item.get('id'),
                         product_name=item.get('name') or item.get('title', 'Unknown Product'),
                         price=Decimal(str(item.get('price', 0))),
-                        quantity=int(float(item.get('quantity', 1)))
+                        quantity=parsed_qty
                     )
                 
                 # Deduct Stock
                 print("Updating stock...")
                 for item in cart_items:
                     product_id = item.get('id')
-                    qty = int(float(item.get('quantity', 0)))
+                    raw_qty_stock = item.get('quantity', 0)
+                    qty = int(float(raw_qty_stock))
+                    print(f"DEBUG: stock deduc item={product_id}, raw_qty='{raw_qty_stock}', parsed_qty={qty}")
                     if product_id and qty > 0:
                         product = Product.objects.filter(id=product_id).first()
                         if product:
