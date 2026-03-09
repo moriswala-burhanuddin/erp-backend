@@ -281,24 +281,28 @@ class ProductSerializer(serializers.ModelSerializer):
         return obj.price_usd or obj.selling_price
 
     def get_slug(self, obj):
-        from django.utils.text import slugify
-        return slugify(obj.name)
+        return obj.sku or f"prod-{obj.id}"
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = '__all__'
 
-class SaleSerializer(serializers.ModelSerializer):
-    items = serializers.SerializerMethodField()
-    order_id = serializers.SerializerMethodField()
-    currency = serializers.CharField(default='₹', read_only=True)
-    amount = serializers.DecimalField(source='total_amount', max_digits=12, decimal_places=2, read_only=True)
-    created_at = serializers.DateTimeField(source='date', read_only=True)
+    # Online Delivery Details
+    courier_name = serializers.CharField(source='online_order.courier_name', read_only=True, allow_null=True)
+    tracking_number = serializers.CharField(source='online_order.tracking_number', read_only=True, allow_null=True)
+    delivery_status = serializers.CharField(source='online_order.status', read_only=True, allow_null=True)
+    estimated_delivery = serializers.DateField(source='online_order.estimated_delivery_date', read_only=True, allow_null=True)
 
     class Meta:
         model = Sale
-        fields = '__all__'
+        fields = [
+            'id', 'invoice_number', 'status', 'type', 'items', 'subtotal', 
+            'discount_amount', 'tax_amount', 'total_amount', 'profit', 
+            'payment_mode', 'account', 'customer', 'store', 'source', 'date',
+            'order_id', 'currency', 'amount', 'created_at',
+            'courier_name', 'tracking_number', 'delivery_status', 'estimated_delivery'
+        ]
 
     def get_items(self, obj):
         import json
@@ -341,6 +345,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_image = serializers.CharField(source='product.image', read_only=True)
     subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    price_at_time = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     
     class Meta:
         model = CartItem

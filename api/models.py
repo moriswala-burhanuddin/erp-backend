@@ -237,13 +237,29 @@ class Delivery(models.Model):
     address = models.TextField()
     delivery_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     is_cod = models.BooleanField(default=False)
-    status = models.CharField(max_length=50, choices=[
+    
+    DELIVERY_TYPES = [
+        ('internal', 'Internal Employee'),
+        ('external', 'Third-Party Provider'),
+    ]
+    delivery_type = models.CharField(max_length=20, choices=DELIVERY_TYPES, default='internal')
+    delivery_provider = models.CharField(max_length=100, null=True, blank=True) # e.g. DHL, BlueDart
+    tracking_number = models.CharField(max_length=100, null=True, blank=True)
+    
+    STATUS_CHOICES = [
         ('pending', 'Pending'),
-        ('dispatched', 'Dispatched'),
-        ('delivered', 'Delivered')
-    ], default='pending')
+        ('processing', 'Processing'),
+        ('shipped', 'Shipped'),
+        ('out_for_delivery', 'Out for Delivery'),
+        ('delivered', 'Delivered'),
+        ('cancelled', 'Cancelled'),
+        ('failed', 'Failed'),
+    ]
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
+    
     delivery_date = models.DateTimeField(null=True, blank=True)
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    notes = models.TextField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
 
 class Supplier(models.Model):
