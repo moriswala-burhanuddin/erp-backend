@@ -19,7 +19,7 @@ from .models import (
     ProductImage, KeyFeature, Cart, CartItem, Review, Feedback,
     OnlineOrder, OnlineOrderItem, OnlineReturn
 )
-from django.db.models import Sum, Count, F
+from django.db.models import Sum, Count, F, Q
 
 
 from .serializers import (
@@ -1213,15 +1213,14 @@ class CartViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
 
     def _get_cart(self, request):
+        session_key = request.headers.get('X-Cart-Session') or request.headers.get('x-cart-session')
         if request.user.is_authenticated:
             cart, _ = Cart.objects.get_or_create(user=request.user)
             return cart
-        else:
-            session_key = request.headers.get('x-cart-session')
-            if not session_key:
-                return None
+        if session_key:
             cart, _ = Cart.objects.get_or_create(session_key=session_key)
             return cart
+        return None
 
     def list(self, request):
         cart = self._get_cart(request)
@@ -1299,10 +1298,19 @@ class CartItemViewSet(viewsets.ModelViewSet):
         return None
 
     def get_queryset(self):
-        cart = self._get_cart(self.request)
-        if not cart:
+        user = self.request.user
+        session_id = self.request.headers.get('X-Cart-Session') or self.request.headers.get('x-cart-session')
+        
+        q_filter = Q()
+        if user.is_authenticated:
+            q_filter |= Q(cart__user=user)
+        if session_id:
+            q_filter |= Q(cart__session_key=session_id)
+            
+        if not (user.is_authenticated or session_id):
             return CartItem.objects.none()
-        return CartItem.objects.filter(cart=cart)
+            
+        return CartItem.objects.filter(q_filter).distinct()
 
     def perform_create(self, serializer):
         cart = self._get_cart(self.request)
