@@ -962,6 +962,17 @@ class SaleViewSet(viewsets.ModelViewSet):
             # 2. Create Sale in ERP
             with transaction.atomic():
                 print("Transaction started...")
+                # 3. Check if OnlineOrder already exists (Prevent duplicate creation on retries)
+                if order_id and OnlineOrder.objects.filter(order_id=order_id).exists():
+                    print(f"[INFO] Order {order_id} already exists. Returning success.")
+                    oo = OnlineOrder.objects.get(order_id=order_id)
+                    return Response({
+                        "status": "success",
+                        "sale_id": oo.sale.id if oo.sale else None,
+                        "invoice_number": oo.sale.invoice_number if oo.sale else None,
+                        "message": "Order already processed"
+                    }, status=status.HTTP_200_OK)
+
                 # Find or Create Customer
                 cust_email = shipping_address.get('email') or request.user.email
                 customer = Customer.objects.filter(email=cust_email).first()
@@ -986,7 +997,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                 if not customer:
                     print(f"Creating new customer for {cust_email}...")
                     customer = Customer.objects.create(
-                        name=shipping_address.get('name', request.user.full_name or 'Web Customer'),
+                        name=shipping_address.get('name', getattr(request.user, 'full_name', 'Web Customer')),
                         email=cust_email,
                         phone=shipping_address.get('phone', ''),
                         store=first_store,
@@ -1029,7 +1040,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                     amount=amount_input,
                     sale=sale,
                     status='Processing',
-                    full_name=shipping_address.get('name', request.user.full_name or 'Web Customer'),
+                    full_name=shipping_address.get('name', getattr(request.user, 'full_name', 'Web Customer')),
                     phone=shipping_address.get('phone', ''),
                     address=shipping_address.get('address', shipping_address.get('address_line1', '')),
                     city=shipping_address.get('city', ''),
@@ -1081,11 +1092,6 @@ class SaleViewSet(viewsets.ModelViewSet):
             error_msg = f"Verification failed: {str(e)}"
             print(f"=== VERIFY PAYMENT ERROR: {error_msg} ===")
             return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
-            return Response({
-                "status": "success",
-                "sale_id": sale.id,
-                "invoice_number": sale.invoice_number
-            }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             import traceback
