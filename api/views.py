@@ -897,22 +897,19 @@ class SaleViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def create_razorpay_order(self, request):
-        amount = request.data.get('amount', 0)
-        # Handle cases where amount might be passed as string from frontend
+        amount_val = request.data.get('amount', 0)
         try:
-            amount = float(amount)
+            # Convert to float then to paise (integer)
+            amount = int(float(amount_val) * 100)
         except (TypeError, ValueError):
             amount = 0
 
-        # Note: integration with razorpay package
-        # Since we might not have razorpay installed in the ERP backend, 
-        # we generate a stub or mockup for now that the frontend expects.
-        import time
-        order_id = f"order_{int(time.time())}"
+        # Note: We are NOT generating a server-side order_id here 
+        # because the 'razorpay' python package is not installed.
+        # Removing order_id from response allows standard checkout.
         
         from django.conf import settings
         return Response({
-            "order_id": order_id,
             "amount": amount,
             "key_id": settings.RAZORPAY_KEY_ID,
             "currency": "INR",
