@@ -983,12 +983,13 @@ class SaleViewSet(viewsets.ModelViewSet):
                 print(f"Customer Found: {customer.id if customer else 'None'}")
                 
                 # Fetch or Create fallback Store/Account
-                first_store = Store.objects.first()
+                # Intelligent Store Selection for Logistics
+                first_store = Store.objects.filter(name__icontains='Main').first() or Store.objects.first()
                 if not first_store:
                     print("Creating fallback store...")
                     first_store = Store.objects.create(name="Hardware Central [Main Branch]", branch="Main")
                 
-                first_account = Account.objects.filter(type='cash').first() or Account.objects.first()
+                first_account = Account.objects.first()
                 if not first_account:
                     print("Creating fallback account...")
                     first_account = Account.objects.create(
@@ -1082,8 +1083,8 @@ class SaleViewSet(viewsets.ModelViewSet):
                 for item in cart_items:
                     raw_qty = item.get('quantity', 1)
                     parsed_qty = int(float(raw_qty))
-                    # Use provided name/product_name/project_title to avoid "Unknown Product"
-                    p_name = item.get('product_name') or item.get('project_title') or item.get('name') or item.get('title', 'Unknown Product')
+                    # Use provided names to avoid "Unknown Product" - checking camelCase productName too
+                    p_name = item.get('productName') or item.get('product_name') or item.get('project_title') or item.get('name') or item.get('title', 'Unknown Product')
                     print(f"DEBUG: item={item.get('id')}, name={p_name}, qty={parsed_qty}")
                     OnlineOrderItem.objects.create(
                         order=oo,
@@ -1310,9 +1311,23 @@ class CartItemViewSet(viewsets.ModelViewSet):
         
         # Ensure price_at_time is set from the product
         product_id = self.request.data.get('product_id')
+        if not product_id:
+             raise serializers.ValidationError({"product_id": "This field is required for item creation."})
+             
         product = get_object_or_404(Product, id=product_id)
-        
         serializer.save(cart=cart, product=product, price_at_time=product.selling_price or 0)
+
+    def perform_update(self, serializer):
+        # Prevent 400 errors during quantity updates if product_id is missing
+        instance = self.get_object()
+        product_id = self.request.data.get('product_id')
+        
+        if product_id:
+            product = get_object_or_404(Product, id=product_id)
+            serializer.save(product=product)
+        else:
+            # If no product_id provided, just save with existing product to avoid validation issues
+            serializer.save(product=instance.product)
 
 class OnlineOrderViewSet(viewsets.ModelViewSet):
     serializer_class = OnlineOrderSerializer

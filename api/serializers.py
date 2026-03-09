@@ -355,7 +355,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     project = ProductSerializer(source='product', read_only=True)
     product_id = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(), source='product', write_only=True, required=False, allow_null=True
+        queryset=Product.objects.all(), write_only=True, required=False, allow_null=True
     )
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_image = serializers.CharField(source='product.image', read_only=True)
