@@ -288,11 +288,15 @@ class CustomerSerializer(serializers.ModelSerializer):
         model = Customer
         fields = '__all__'
 
+class SaleSerializer(serializers.ModelSerializer):
     # Online Delivery Details
     courier_name = serializers.CharField(source='online_order.courier_name', read_only=True, allow_null=True)
     tracking_number = serializers.CharField(source='online_order.tracking_number', read_only=True, allow_null=True)
     delivery_status = serializers.CharField(source='online_order.status', read_only=True, allow_null=True)
     estimated_delivery = serializers.DateField(source='online_order.estimated_delivery_date', read_only=True, allow_null=True)
+    
+    items = serializers.SerializerMethodField()
+    order_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
