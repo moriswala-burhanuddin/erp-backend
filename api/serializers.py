@@ -124,7 +124,8 @@ from .models import (
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
     PaymentTerm, SupplierDocument, Invoice, InvoiceItem, Cheque, Category,
     Product, Customer, Sale, Employee, Attendance, Leave, Payroll, 
-    PerformanceReview, Receiving, ReceivingItem, ProductImage, KeyFeature
+    PerformanceReview, Receiving, ReceivingItem, ProductImage, KeyFeature,
+    OnlineOrder, OnlineOrderItem, Cart, CartItem, Review, Feedback
 )
 
 
