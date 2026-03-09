@@ -272,8 +272,22 @@ class PushEndpoint(APIView):
                                 email = cleaned_data.get('email')
                                 existing_user = User.objects.filter(email=email).first()
                                 if existing_user:
-                                    print(f"DEBUG: Found existing user by email: {email}. Updating record with id={obj_id}")
+                                    print(f"DEBUG: Found existing user by email: {email}. Updating record (protecting password)...")
+                                    # Protect existing password if the incoming one is the placeholder
+                                    incoming_password = cleaned_data.get('password')
+                                    from django.contrib.auth.hashers import check_password, make_password
+                                    
+                                    # If incoming password is the placeholder, don't overwrite the existing one
+                                    is_placeholder = False
+                                    try:
+                                        # Compare incoming (which might be already hashed by the logic above) 
+                                        # to the hash of 'ChangeMe123!'
+                                        is_placeholder = check_password('ChangeMe123!', incoming_password)
+                                    except: pass
+
                                     for key, value in cleaned_data.items():
+                                        if key == 'password' and is_placeholder:
+                                            continue # Keep existing password
                                         setattr(existing_user, key, value)
                                     existing_user.save()
                                     obj, created = existing_user, False
@@ -812,7 +826,8 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         from django.db.models import Q
-        qs = Product.objects.filter(is_deleted=False).select_related('category', 'store').prefetch_related('images', 'features')
+        # Filter is_deleted=False but also handle NULLs just in case repair_db hasn't run
+        qs = Product.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True)).select_related('category', 'store').prefetch_related('images', 'features')
         
         store_id = self.request.query_params.get('store_id')
         sku = self.request.query_params.get('sku')
@@ -895,8 +910,8 @@ class SaleViewSet(viewsets.ModelViewSet):
             "key_id": "rzp_test_stub_key",
             "currency": "INR",
             "description": "Elegance Store Order",
-            "user_name": request.user.first_name,
-            "user_email": request.user.email,
+            "user_name": request.user.get_full_name() if request.user.is_authenticated else "Guest",
+            "user_email": request.user.email if request.user.is_authenticated else "guest@example.com",
             "user_contact": ""
         })
 
@@ -919,17 +934,20 @@ class SaleViewSet(viewsets.ModelViewSet):
                 # Find or Create Customer
                 cust_email = shipping_address.get('email')
                 customer = Customer.objects.filter(email=cust_email).first() if cust_email else None
+                first_store = Store.objects.first()
+                first_account = Account.objects.first()
+                
                 if not customer:
                     customer = Customer.objects.create(
                         name=shipping_address.get('name', 'Web Customer'),
                         email=cust_email,
                         phone=shipping_address.get('phone', ''),
-                        store_id=data.get('store_id', Store.objects.first().id)
+                        store=first_store
                     )
                 
                 # Create Sale Record
                 sale = Sale.objects.create(
-                    invoice_number=f"WEB-{timezone.now().strftime('%Y%m%d%04d')}",
+                    invoice_number=f"WEB-{timezone.now().strftime('%Y%m%d%H%M%S')}",
                     status='completed',
                     type='retail',
                     source='Online',
@@ -937,9 +955,9 @@ class SaleViewSet(viewsets.ModelViewSet):
                     total_amount=data.get('amount', 0),
                     profit=data.get('profit', 0),
                     payment_mode='card',
-                    account_id=data.get('account_id', Account.objects.first().id),
+                    account=first_account,
                     customer=customer,
-                    store_id=data.get('store_id', Store.objects.first().id),
+                    store=first_store,
                     date=timezone.now()
                 )
                 
@@ -1063,8 +1081,13 @@ class CartViewSet(viewsets.ViewSet):
             
         # Support both 'product_id' (internal) and 'project_id' (Elegance frontend name)
         product_id = request.data.get('product_id') or request.data.get('project_id')
-        quantity = Decimal(str(request.data.get('quantity', 1)))
-        
+        try:
+            qty_val = request.data.get('quantity', 1)
+            if qty_val == "" or qty_val is None: qty_val = 1
+            quantity = Decimal(str(qty_val))
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            quantity = Decimal('1')
+            
         if not product_id:
             return Response({"error": "Product ID is required"}, status=400)
             
@@ -1079,10 +1102,10 @@ class CartViewSet(viewsets.ViewSet):
         item, created = CartItem.objects.get_or_create(
             cart=cart, 
             product=product,
-            defaults={'price_at_time': product.selling_price, 'quantity': 0}
+            defaults={'price_at_time': product.selling_price or 0, 'quantity': 0}
         )
         item.quantity += quantity
-        item.price_at_time = product.selling_price # Update to current price
+        item.price_at_time = product.selling_price or 0 # Update to current price
         item.save()
         
         return Response(CartSerializer(cart).data)
