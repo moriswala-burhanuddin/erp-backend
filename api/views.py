@@ -1066,16 +1066,29 @@ class SaleViewSet(viewsets.ModelViewSet):
                     pincode=shipping_address.get('pincode', '')
                 )
                 
-                # Create OnlineOrderItems
+                # Create Delivery record for Logistics module
+                print("Creating Delivery record...")
+                Delivery.objects.create(
+                    sale=sale,
+                    address=f"{oo.address}, {oo.city}, {oo.state} - {oo.pincode}",
+                    is_cod=False,
+                    status='pending',
+                    store=first_store,
+                    notes=f"Online Order ID: {oo.order_id}"
+                )
+                
+                # Create OnlineOrderItems with robust name selection
                 print("Creating OnlineOrderItems...")
                 for item in cart_items:
                     raw_qty = item.get('quantity', 1)
                     parsed_qty = int(float(raw_qty))
-                    print(f"DEBUG: item={item.get('id')}, raw_qty='{raw_qty}', parsed_qty={parsed_qty}")
+                    # Use provided name/product_name/project_title to avoid "Unknown Product"
+                    p_name = item.get('product_name') or item.get('project_title') or item.get('name') or item.get('title', 'Unknown Product')
+                    print(f"DEBUG: item={item.get('id')}, name={p_name}, qty={parsed_qty}")
                     OnlineOrderItem.objects.create(
                         order=oo,
                         product_id=item.get('id'),
-                        product_name=item.get('name') or item.get('title', 'Unknown Product'),
+                        product_name=p_name,
                         price=Decimal(str(item.get('price', 0))),
                         quantity=parsed_qty
                     )
