@@ -290,9 +290,35 @@ class CustomerSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class SaleSerializer(serializers.ModelSerializer):
+    items = serializers.SerializerMethodField()
+    order_id = serializers.SerializerMethodField()
+    currency = serializers.CharField(default='₹', read_only=True)
+    amount = serializers.DecimalField(source='total_amount', max_digits=12, decimal_places=2, read_only=True)
+    created_at = serializers.DateTimeField(source='date', read_only=True)
+
     class Meta:
         model = Sale
         fields = '__all__'
+
+    def get_items(self, obj):
+        import json
+        if not obj.items:
+            return []
+        try:
+            # Handle both JSON string and already parsed list/dict
+            data = json.loads(obj.items) if isinstance(obj.items, str) else obj.items
+            return data if isinstance(data, list) else [data]
+        except:
+            return []
+
+    def get_order_id(self, obj):
+        try:
+            # Check for OnlineOrder relationship
+            if hasattr(obj, 'online_order'):
+                return obj.online_order.order_id
+        except:
+            pass
+        return obj.invoice_number
 
 from .models import Review, Feedback, Cart, CartItem
 
