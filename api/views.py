@@ -16,7 +16,8 @@ from .models import (
     Receiving, ReceivingItem,
     GiftCard, SalePayment, WorkOrder, Delivery, DeliveryZone,
     Invoice, InvoiceItem, Cheque, Category,
-    ProductImage, KeyFeature, Cart, CartItem, Review, Feedback
+    ProductImage, KeyFeature, Cart, CartItem, Review, Feedback,
+    OnlineOrder, OnlineOrderItem
 )
 
 
@@ -31,7 +32,8 @@ from .serializers import (
     ProductSerializer, CustomerSerializer, SaleSerializer,
     UserRegistrationSerializer, CategorySerializer,
     ProductImageSerializer, KeyFeatureSerializer, CartSerializer, CartItemSerializer,
-    ReviewSerializer, FeedbackSerializer
+    ReviewSerializer, FeedbackSerializer,
+    OnlineOrderSerializer, OnlineOrderItemSerializer
 )
 
 
@@ -965,7 +967,12 @@ class SaleViewSet(viewsets.ModelViewSet):
                 
                 first_account = Account.objects.filter(type='cash').first() or Account.objects.first()
                 if not first_account:
-                    first_account = Account.objects.create(name="Main Cash", type='cash', balance=0)
+                    first_account = Account.objects.create(
+                        name="Main Cash", 
+                        type='cash', 
+                        balance=0,
+                        store=first_store
+                    )
                 
                 if not customer:
                     customer = Customer.objects.create(
@@ -983,7 +990,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                     type='retail',
                     source='Online',
                     items=json.dumps(cart_items),
-                    subtotal=amount_input, # Assuming amount passed is subtotal
+                    subtotal=amount_input,
                     total_amount=amount_input,
                     profit=data.get('profit', 0),
                     payment_mode='card',
@@ -1000,6 +1007,32 @@ class SaleViewSet(viewsets.ModelViewSet):
                     amount=amount_input,
                     account=first_account
                 )
+
+                # Create OnlineOrder record for website tracking
+                oo = OnlineOrder.objects.create(
+                    user_email=cust_email,
+                    order_id=order_id or f"WEB-{sale.id}",
+                    payment_id=payment_id,
+                    amount=amount_input,
+                    sale=sale,
+                    status='Processing',
+                    full_name=shipping_address.get('name', request.user.get_full_name() or 'Web Customer'),
+                    phone=shipping_address.get('phone', ''),
+                    address=shipping_address.get('address', ''),
+                    city=shipping_address.get('city', ''),
+                    state=shipping_address.get('state', ''),
+                    pincode=shipping_address.get('pincode', '')
+                )
+                
+                # Create OnlineOrderItems
+                for item in cart_items:
+                    OnlineOrderItem.objects.create(
+                        order=oo,
+                        product_id=item.get('id'),
+                        product_name=item.get('title', 'Unknown Product'),
+                        price=Decimal(str(item.get('price', 0))),
+                        quantity=int(item.get('quantity', 1))
+                    )
                 
                 # Deduct Stock
                 for item in cart_items:
@@ -1203,3 +1236,13 @@ class CartItemViewSet(viewsets.ModelViewSet):
         if not cart:
             raise serializers.ValidationError("No cart session found")
         serializer.save(cart=cart)
+
+class OnlineOrderViewSet(viewsets.ModelViewSet):
+    serializer_class = OnlineOrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return OnlineOrder.objects.all().order_by('-created_at')
+        return OnlineOrder.objects.filter(user_email=user.email).order_by('-created_at')

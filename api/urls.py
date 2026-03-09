@@ -9,7 +9,8 @@ from .views import (
     ReceivingViewSet, ReceivingItemViewSet,
     InvoiceViewSet, InvoiceItemViewSet, ChequeViewSet,
     ProductViewSet, SaleViewSet, CustomerViewSet, register, CategoryViewSet,
-    ReviewViewSet, FeedbackViewSet, CartViewSet, get_profile, CartItemViewSet
+    ReviewViewSet, FeedbackViewSet, CartViewSet, get_profile, CartItemViewSet,
+    OnlineOrderViewSet
 )
 
 from .serializers import CustomTokenObtainPairView
@@ -39,6 +40,7 @@ router.register(r'orders', SaleViewSet, basename='order')
 router.register(r'customers', CustomerViewSet, basename='customer')
 router.register(r'reviews', ReviewViewSet, basename='review')
 router.register(r'feedback', FeedbackViewSet, basename='feedback')
+router.register(r'online-orders', OnlineOrderViewSet, basename='online_order')
 router.register(r'store/cart/items', CartItemViewSet, basename='cart-item')
 router.register(r'store/cart', CartViewSet, basename='cart')
 

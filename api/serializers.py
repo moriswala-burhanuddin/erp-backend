@@ -333,3 +333,15 @@ class CartSerializer(serializers.ModelSerializer):
 
     def get_count(self, obj):
         return obj.items.count()
+
+class OnlineOrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OnlineOrderItem
+        fields = '__all__'
+
+class OnlineOrderSerializer(serializers.ModelSerializer):
+    web_items = OnlineOrderItemSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = OnlineOrder
+        fields = '__all__'
