@@ -173,6 +173,36 @@ class Customer(models.Model):
     device_id = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+@receiver(post_save, sender=Customer)
+def sync_customer_to_user(sender, instance, created, **kwargs):
+    """
+    Automatically create a User record (login) for every Customer created in the ERP.
+    """
+    if instance.email:
+        # Check if user already exists
+        user = User.objects.filter(email=instance.email).first()
+        if not user:
+            # Create a new user account
+            from django.contrib.auth.hashers import make_password
+            import random
+            import string
+            
+            # Generate a random initial password or use a predictable one
+            # For retail customers, they might need to use "forgot password" or we set a default
+            default_pass = 'Welcome' + ''.join(random.choices(string.digits, k=4)) + '!'
+            
+            new_user = User.objects.create(
+                email=instance.email,
+                username=instance.email.split('@')[0],
+                first_name=instance.name.split(' ')[0],
+                last_name=' '.join(instance.name.split(' ')[1:]) if ' ' in instance.name else '',
+                role='user',
+                is_active=True,    # Manually added customers are active by default
+                is_verified=True,  # Trust the admin-provided email
+                password=make_password(default_pass)
+            )
+            print(f"Auto-created User for customer: {instance.email} with default pass: {default_pass}")
+
 def generate_gc_id(): return generate_id('gc')
 def generate_wo_id(): return generate_id('wo')
 def generate_del_id(): return generate_id('del')

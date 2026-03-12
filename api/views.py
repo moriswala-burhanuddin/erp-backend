@@ -1198,19 +1198,25 @@ def register(request):
             if store:
                 # Map Elegance data to ERP Customer
                 from django.utils import timezone
-                Customer.objects.create(
-                    name=request.data.get('full_name') or user.get_full_name() or user.username,
-                    email=user.email,
-                    phone=request.data.get('phone', ''),
-                    type='retail',
-                    status='active',
-                    source='Online',
-                    store=store,
-                    joined_at=timezone.now()
-                )
-                customer_created = True
+                # Check if customer already exists (might if they were manual customers first)
+                customer = Customer.objects.filter(email=user.email).first()
+                if not customer:
+                    Customer.objects.create(
+                        name=request.data.get('full_name') or user.get_full_name() or user.username,
+                        email=user.email,
+                        phone=request.data.get('phone', ''),
+                        type='retail',
+                        status='active',
+                        source='Online',
+                        store=store,
+                        joined_at=timezone.now()
+                    )
+                    customer_created = True
+                else:
+                    print(f"Customer already exists for {user.email}, skipping auto-creation.")
+                    customer_created = True
         except Exception as e:
-            print(f"Failed to create Customer record for new user: {e}")
+            print(f"Error in customer record creation: {e}")
 
         return Response({
             "status": "success",

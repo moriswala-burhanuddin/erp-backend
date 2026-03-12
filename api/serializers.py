@@ -47,6 +47,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         else:
             data = super().validate(attrs)
         
+        # LENIENCY: If user is staff or admin, they can always log in even if not verified
+        if not self.user.is_verified and not self.user.is_staff and self.user.role not in ['admin', 'super_admin']:
+             if not self.user.is_active:
+                 raise serializers.ValidationError({"detail": "Email not verified. Please check your inbox."})
+        
         # Add extra response data
         user_name = f"{self.user.first_name} {self.user.last_name}".strip()
         if not user_name:
@@ -58,7 +63,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'email': self.user.email,
             'name': user_name,
             'role': self.user.role,
-            'store_id': self.user.store.id if self.user.store else None
+            'store_id': self.user.store.id if self.user.store else None,
+            'is_verified': self.user.is_verified
         }
         return data
 
