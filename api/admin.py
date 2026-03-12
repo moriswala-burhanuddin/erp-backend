@@ -5,7 +5,8 @@ from .models import (
     StockLog, Quotation, Transaction, ExpenseCategory, TaxSlab, 
     StockTransfer, PurchaseOrder, LoyaltyPoint, Commission,
     Supplier, PaymentTerm, SupplierDocument,
-    Receiving, ReceivingItem
+    Receiving, ReceivingItem, SaleReturn, Notification,
+    OnlineOrder, OnlineOrderItem, OnlineReturn
 )
 
 
@@ -120,3 +121,35 @@ class ReceivingAdmin(admin.ModelAdmin):
 @admin.register(ReceivingItem)
 class ReceivingItemAdmin(admin.ModelAdmin):
     list_display = ('id', 'product_name', 'quantity', 'cost', 'total')
+
+@admin.register(SaleReturn)
+class SaleReturnAdmin(admin.ModelAdmin):
+    list_display = ('id', 'sale', 'customer', 'product', 'quantity', 'refund_amount', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('reason', 'customer__name')
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('title', 'user', 'type', 'is_read', 'created_at')
+    list_filter = ('type', 'is_read', 'created_at')
+    search_fields = ('title', 'message')
+
+class OnlineOrderItemInline(admin.TabularInline):
+    model = OnlineOrderItem
+    extra = 0
+
+@admin.register(OnlineOrder)
+class OnlineOrderAdmin(admin.ModelAdmin):
+    list_display = ('order_id', 'user_email', 'amount', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('order_id', 'user_email', 'full_name')
+    inlines = [OnlineOrderItemInline]
+
+@admin.register(OnlineOrderItem)
+class OnlineOrderItemAdmin(admin.ModelAdmin):
+    list_display = ('order', 'product_name', 'quantity', 'price')
+
+@admin.register(OnlineReturn)
+class OnlineReturnAdmin(admin.ModelAdmin):
+    list_display = ('order', 'status', 'refund_amount', 'created_at')
+    list_filter = ('status', 'created_at')

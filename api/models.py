@@ -501,7 +501,7 @@ class PurchaseOrder(models.Model):
 
 class LoyaltyPoint(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_lp_id)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='loyalty_points')
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='loyalty_points')
     points = models.IntegerField()
     reason = models.CharField(max_length=255, null=True, blank=True)
     sale = models.ForeignKey(Sale, on_delete=models.SET_NULL, null=True, blank=True)
