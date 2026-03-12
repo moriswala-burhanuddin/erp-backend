@@ -16,8 +16,8 @@ from .models import (
     Receiving, ReceivingItem,
     GiftCard, SalePayment, WorkOrder, Delivery, DeliveryZone,
     Invoice, InvoiceItem, Cheque, Category,
-    ProductImage, KeyFeature, Cart, CartItem, Review, Feedback,
-    OnlineOrder, OnlineOrderItem, OnlineReturn
+    OnlineOrder, OnlineOrderItem, OnlineReturn,
+    SaleReturn, Notification
 )
 from django.db.models import Sum, Count, F, Q
 
@@ -34,7 +34,8 @@ from .serializers import (
     UserRegistrationSerializer, CategorySerializer,
     ProductImageSerializer, KeyFeatureSerializer, CartSerializer, CartItemSerializer,
     ReviewSerializer, FeedbackSerializer,
-    OnlineOrderSerializer, OnlineOrderItemSerializer, OnlineReturnSerializer
+    OnlineOrderSerializer, OnlineOrderItemSerializer, OnlineReturnSerializer,
+    SaleReturnSerializer, NotificationSerializer
 )
 
 
@@ -45,6 +46,11 @@ from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 import decimal
 from decimal import Decimal
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.mail import send_mail
+from django.conf import settings
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -179,7 +185,7 @@ class PushEndpoint(APIView):
                                 from django.contrib.auth.hashers import make_password
                                 row_data['password'] = make_password('ChangeMe123!')
                                 print(f"DEBUG: Setting default password for {row_data.get('email')}")
-                            elif not row_data['password'].startswith(('pbkdf2_', 'bcrypt', 'argon2')):
+                            elif not row_data['password'].startswith(('pbkdf2_', 'bcrypt', '$2b$', '$2a$', 'argon2')):
                                 from django.contrib.auth.hashers import make_password
                                 row_data['password'] = make_password(row_data['password'])
                                 print(f"DEBUG: Hashing plain-text password for {row_data.get('email')}")
@@ -196,6 +202,9 @@ class PushEndpoint(APIView):
                             # Ensure is_active is True for synced users
                             if 'is_active' not in row_data:
                                 row_data['is_active'] = True
+                            
+                            # Admin-created users in ERP are pre-verified
+                            row_data['is_verified'] = True
 
                             # [PROMOTION LOGIC] Grant Django admin access for admin roles
                             if row_data.get('role') in ['admin', 'super_admin']:
@@ -280,15 +289,14 @@ class PushEndpoint(APIView):
                                     print(f"DEBUG: Found existing user by email: {email}. Updating record (protecting password)...")
                                     # Protect existing password if the incoming one is the placeholder
                                     incoming_password = cleaned_data.get('password')
-                                    from django.contrib.auth.hashers import check_password, make_password
+                                    from django.contrib.auth.hashers import check_password
                                     
-                                    # If incoming password is the placeholder, don't overwrite the existing one
                                     is_placeholder = False
-                                    try:
-                                        # Compare incoming (which might be already hashed by the logic above) 
-                                        # to the hash of 'ChangeMe123!'
-                                        is_placeholder = check_password('ChangeMe123!', incoming_password)
-                                    except: pass
+                                    if incoming_password:
+                                        try:
+                                            # If incoming matches placeholder, it's definitely a placeholder
+                                            is_placeholder = check_password('ChangeMe123!', incoming_password)
+                                        except: pass
 
                                     for key, value in cleaned_data.items():
                                         if key == 'password' and is_placeholder:
@@ -1157,6 +1165,30 @@ def register(request):
     serializer = UserRegistrationSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save()
+        user.is_active = False # Deactivate until verified
+        user.save()
+        
+        # Email Verification Logic
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        
+        # The frontend URL for verification
+        verify_url = f"https://elegance-store.netlify.app/verify-email/{uid}/{token}"
+        
+        subject = "Verify your Elegance account"
+        message = f"Hi {user.first_name or user.username},\n\nPlease verify your email by clicking the link below:\n\n{verify_url}\n\nIf you did not register, please ignore this email."
+        
+        try:
+            send_mail(
+                subject,
+                message,
+                settings.EMAIL_HOST_USER,
+                [user.email],
+                fail_silently=False,
+            )
+            print(f"Verification email sent to {user.email}")
+        except Exception as e:
+            print(f"Failed to send verification email: {e}")
         
         # Create a Customer record for this new user so they appear in the ERP
         from .models import Customer, Store
@@ -1191,6 +1223,29 @@ def register(request):
             }
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_email(request):
+    uidb64 = request.data.get('uid')
+    token = request.data.get('token')
+    
+    if not uidb64 or not token:
+        return Response({"error": "UID and token are required"}, status=400)
+    
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+        
+    if user is not None and default_token_generator.check_token(user, token):
+        user.is_active = True
+        user.is_verified = True
+        user.save()
+        return Response({"status": "success", "message": "Email verified successfully"})
+    else:
+        return Response({"error": "Invalid verification link"}, status=400)
 
 from .models import Review, Feedback
 from .serializers import ReviewSerializer, FeedbackSerializer
@@ -1392,3 +1447,23 @@ class OnlineReportViewSet(viewsets.ViewSet):
             'orders': total_orders,
             'top_products': top_products
         })
+
+class SaleReturnViewSet(viewsets.ModelViewSet):
+    queryset = SaleReturn.objects.all().order_by('-created_at')
+    serializer_class = SaleReturnSerializer
+    permission_classes = [IsAuthenticated]
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    queryset = Notification.objects.all().order_by('-created_at')
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(Q(user=self.request.user) | Q(user=None)).order_by('-created_at')
+
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save()
+        return Response({'status': 'read'})

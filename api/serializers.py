@@ -1,9 +1,12 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .models import User, Store
+from .models import User, Store, SaleReturn, Notification, Product, Customer
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    email = serializers.EmailField(required=False)
+    username = serializers.CharField(required=False)
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -22,8 +25,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        # Support both 'email' and 'username' keys from frontend
+        username = attrs.get('username') or attrs.get('email')
+        if username:
+            attrs['username'] = username
+            
         # EMERGENCY BYPASS for recovery (v1.0.7)
-        email = attrs.get('email') or attrs.get('username')
+        email = username
         password = attrs.get('password')
         if email == 'aarefa@gmail.com' and password == 'ChangeMe123!':
             user = User.objects.filter(email='aarefa@gmail.com').first()
@@ -359,12 +367,15 @@ class CartItemSerializer(serializers.ModelSerializer):
     )
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_image = serializers.CharField(source='product.image', read_only=True)
-    subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    subtotal = serializers.SerializerMethodField()
     price_at_time = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     
     class Meta:
         model = CartItem
         fields = ['id', 'product', 'project', 'product_id', 'product_name', 'product_image', 'quantity', 'price_at_time', 'subtotal']
+
+    def get_subtotal(self, obj):
+        return obj.quantity * obj.price_at_time
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
@@ -398,4 +409,16 @@ class OnlineOrderSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = OnlineOrder
+        fields = '__all__'
+
+class SaleReturnSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    class Meta:
+        model = SaleReturn
+        fields = '__all__'
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
         fields = '__all__'

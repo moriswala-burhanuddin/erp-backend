@@ -2,6 +2,8 @@ import random
 import string
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 def generate_id(prefix='id'):
     """Generate a random ID similar to the frontend format: prefix-randomString"""
@@ -46,6 +48,8 @@ def generate_cart_id(): return generate_id('cart')
 def generate_ci_id(): return generate_id('ci')
 def generate_rev_id(): return generate_id('rev')
 def generate_fb_id(): return generate_id('fb')
+def generate_ret_id(): return generate_id('ret')
+def generate_nt_id(): return generate_id('nt')
 
 
 
@@ -89,6 +93,7 @@ class User(AbstractUser):
     pincode = models.CharField(max_length=20, blank=True, null=True)
     
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
     
     # We use email as login instead of username for better UX
@@ -133,6 +138,7 @@ class Product(models.Model):
     selling_price = models.DecimalField(max_digits=10, decimal_places=2)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.IntegerField(default=0)
+    min_stock = models.IntegerField(default=5)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='products')
     unit = models.CharField(max_length=50, null=True, blank=True)
     brand = models.CharField(max_length=100, null=True, blank=True)
@@ -757,6 +763,50 @@ class Feedback(models.Model):
 
     def __str__(self):
         return f"Feedback from {self.name}: {self.subject}"
+
+class SaleReturn(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_ret_id)
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='returns')
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=10, decimal_places=3)
+    reason = models.TextField()
+    refund_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=50, choices=[('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected')], default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
+        if is_new and self.status == 'approved':
+            # Increase stock if return is approved
+            self.product.quantity += int(self.quantity)
+            self.product.save()
+
+class Notification(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_nt_id)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications', null=True, blank=True) # None for system-wide
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    type = models.CharField(max_length=50, choices=[('info', 'Info'), ('warning', 'Warning'), ('error', 'Error'), ('success', 'Success')], default='info')
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.type.upper()}: {self.title}"
+
+@receiver(post_save, sender=Product)
+def check_stock_level(sender, instance, **kwargs):
+    if instance.quantity <= instance.min_stock:
+        # Check if notification already exists to avoid spam
+        title = f"Low Stock: {instance.name}"
+        if not Notification.objects.filter(title=title, is_read=False).exists():
+            Notification.objects.create(
+                title=title,
+                message=f"Product {instance.name} is low on stock ({instance.quantity} left). Minimum level is {instance.min_stock}.",
+                type='warning'
+            )
 
 
 class OnlineOrder(models.Model):
