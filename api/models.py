@@ -228,7 +228,7 @@ class Sale(models.Model):
     profit = models.DecimalField(max_digits=12, decimal_places=2)
     payment_mode = models.CharField(max_length=50) # Legacy single mode
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True)
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='sales')
     source = models.CharField(max_length=50, default='POS') # POS, Online, etc.
     date = models.DateTimeField()
@@ -797,7 +797,7 @@ class Feedback(models.Model):
 class SaleReturn(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_ret_id)
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='returns')
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True)
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.DecimalField(max_digits=10, decimal_places=3)
     reason = models.TextField()
