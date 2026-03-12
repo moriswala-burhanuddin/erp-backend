@@ -59,7 +59,7 @@ urlpatterns = [
     # Auth
     path('auth/login', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/register', register, name='register'),
-    path('auth/verify-email', verify_email, name='verify_email'),
+    path('auth/verify-email/<str:uidb64>/<str:token>/', verify_email, name='verify_email'),
     path('auth/profile/', get_profile, name='get_profile'),
     path('auth/refresh', TokenRefreshView.as_view(), name='token_refresh'),
 ] + router.urls

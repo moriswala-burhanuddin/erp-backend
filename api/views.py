@@ -1173,7 +1173,7 @@ def register(request):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         
         # The frontend URL for verification
-        verify_url = f"https://elegance-store.netlify.app/verify-email/{uid}/{token}"
+        verify_url = f"{settings.FRONTEND_URL}/verify-email/{uid}/{token}"
         
         subject = "Verify your Elegance account"
         message = f"Hi {user.first_name or user.username},\n\nPlease verify your email by clicking the link below:\n\n{verify_url}\n\nIf you did not register, please ignore this email."
@@ -1224,12 +1224,9 @@ def register(request):
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([AllowAny])
-def verify_email(request):
-    uidb64 = request.data.get('uid')
-    token = request.data.get('token')
-    
+def verify_email(request, uidb64, token):
     if not uidb64 or not token:
         return Response({"error": "UID and token are required"}, status=400)
     

@@ -168,3 +168,6 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='fseu zdst suny uxaq
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = 'FitProjects By Moris <fitprojectsbymoris@gmail.com>'
 ADMINS = [('Moris', 'fitprojectsbymoris@gmail.com')]
+
+# Frontend URL for email verification
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
