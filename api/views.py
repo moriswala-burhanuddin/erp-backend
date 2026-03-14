@@ -1465,6 +1465,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return Notification.objects.filter(Q(user=self.request.user) | Q(user=None)).order_by('-created_at')
 
     @action(detail=True, methods=['post'])
+    def mark_as_read(self, request, pk=None):
         notification = self.get_object()
         notification.is_read = True
         notification.save()
