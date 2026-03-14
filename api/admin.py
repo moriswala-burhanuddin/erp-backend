@@ -170,23 +170,27 @@ class ClientFeatureInline(admin.TabularInline):
 
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
-    list_display = ('name', 'license_key', 'created_at')
-    search_fields = ('name', 'license_key')
+    list_display = ('name', 'license_key', 'id', 'created_at')
+    search_fields = ('name', 'license_key', 'id')
+    readonly_fields = ('id', 'created_at', 'updated_at')
     inlines = [DeviceInline, ClientFeatureInline]
 
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
-    list_display = ('device_id', 'client', 'registered_at', 'last_active')
-    search_fields = ('device_id', 'client__name')
+    list_display = ('device_id', 'client', 'id', 'registered_at', 'last_active')
+    search_fields = ('device_id', 'client__name', 'id')
+    readonly_fields = ('id', 'registered_at', 'last_active')
     list_filter = ('client',)
 
 @admin.register(Feature)
 class FeatureAdmin(admin.ModelAdmin):
-    list_display = ('name', 'description', 'created_at')
-    search_fields = ('name',)
+    list_display = ('name', 'id', 'created_at')
+    search_fields = ('name', 'id')
+    readonly_fields = ('id', 'created_at')
 
 @admin.register(ClientFeature)
 class ClientFeatureAdmin(admin.ModelAdmin):
-    list_display = ('client', 'feature', 'enabled', 'updated_at')
+    list_display = ('client', 'feature', 'enabled', 'id', 'updated_at')
     list_filter = ('enabled', 'feature', 'client')
-    search_fields = ('client__name', 'feature__name')
+    readonly_fields = ('id', 'updated_at')
+    search_fields = ('client__name', 'feature__name', 'id')

@@ -918,7 +918,7 @@ class OnlineReturn(models.Model):
 # ──────────────────────────────────────────────────────────────
 
 class Client(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_client_id)
+    id = models.CharField(max_length=50, primary_key=True, default=generate_client_id, editable=False)
     name = models.CharField(max_length=255)
     license_key = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -928,7 +928,7 @@ class Client(models.Model):
         return self.name
 
 class Device(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_device_id)
+    id = models.CharField(max_length=50, primary_key=True, default=generate_device_id, editable=False)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='devices')
     device_id = models.CharField(max_length=255, unique=True)
     registered_at = models.DateTimeField(auto_now_add=True)
@@ -938,7 +938,7 @@ class Device(models.Model):
         return f"Device {self.device_id} ({self.client.name})"
 
 class Feature(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_feature_id)
+    id = models.CharField(max_length=50, primary_key=True, default=generate_feature_id, editable=False)
     name = models.CharField(max_length=150, unique=True) # e.g., 'ai_chatbot', 'advanced_reports'
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -947,7 +947,7 @@ class Feature(models.Model):
         return self.name
 
 class ClientFeature(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_clientfeat_id)
+    id = models.CharField(max_length=50, primary_key=True, default=generate_clientfeat_id, editable=False)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='client_features')
     feature = models.ForeignKey(Feature, on_delete=models.CASCADE, related_name='client_features')
     enabled = models.BooleanField(default=False)
@@ -986,3 +986,22 @@ def create_client_features_for_new_client(sender, instance, created, **kwargs):
                 feature=feature,
                 defaults={'enabled': False}
             )
+
+def seed_ai_features():
+    """
+    Helper function to seed the specific AI features requested by the user.
+    """
+    ai_features = [
+        ("Business Analyst", "Chat with your ERP data for insights."),
+        ("Inventory Forecast", "Predicts stockouts based on sales velocity."),
+        ("Invoice OCR", "Automatically scans and populates purchase orders from receipt images."),
+        ("Reorder Optimization", "Recommends optimal minStock and reorder quantities."),
+        ("HR & Performance AI", "Analyzes attendance patterns, employee risk, and shift scheduling."),
+        ("Recruitment AI", "Parses and scores resumes automatically."),
+        ("HR Assistant", "A dedicated policy-aware chatbot for staff."),
+    ]
+    
+    from api.models import Feature
+    for name, desc in ai_features:
+        Feature.objects.get_or_create(name=name, defaults={'description': desc})
+    print(f"Successfully seeded {len(ai_features)} AI features.")
