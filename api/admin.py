@@ -175,6 +175,11 @@ class ClientAdmin(admin.ModelAdmin):
     readonly_fields = ('id', 'created_at', 'updated_at')
     inlines = [DeviceInline, ClientFeatureInline]
 
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        # Provisions any features that weren't added/edited via the inline
+        form.instance.provision_default_features()
+
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
     list_display = ('device_id', 'client', 'id', 'registered_at', 'last_active')

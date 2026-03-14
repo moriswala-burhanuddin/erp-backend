@@ -927,6 +927,17 @@ class Client(models.Model):
     def __str__(self):
         return self.name
 
+    def provision_default_features(self):
+        """
+        Ensures all existing features are linked to this client.
+        """
+        for feature in Feature.objects.all():
+            ClientFeature.objects.get_or_create(
+                client=self,
+                feature=feature,
+                defaults={'enabled': False}
+            )
+
 class Device(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_device_id, editable=False)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='devices')
@@ -970,20 +981,6 @@ def create_client_features_for_new_feature(sender, instance, created, **kwargs):
             ClientFeature.objects.get_or_create(
                 client=client,
                 feature=instance,
-                defaults={'enabled': False}
-            )
-
-@receiver(post_save, sender=Client)
-def create_client_features_for_new_client(sender, instance, created, **kwargs):
-    """
-    When a new client is added, automatically link all existing features and set 
-    them to DISABLED by default.
-    """
-    if created:
-        for feature in Feature.objects.all():
-            ClientFeature.objects.get_or_create(
-                client=instance,
-                feature=feature,
                 defaults={'enabled': False}
             )
 
