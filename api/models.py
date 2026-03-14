@@ -918,12 +918,17 @@ class OnlineReturn(models.Model):
 # ──────────────────────────────────────────────────────────────
 
 class Client(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_client_id, editable=False)
+    id = models.CharField(max_length=50, primary_key=True, editable=False)
     name = models.CharField(max_length=255)
     license_key = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = generate_client_id()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
 
@@ -939,26 +944,36 @@ class Client(models.Model):
             )
 
 class Device(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_device_id, editable=False)
+    id = models.CharField(max_length=50, primary_key=True, editable=False)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='devices')
     device_id = models.CharField(max_length=255, unique=True)
     registered_at = models.DateTimeField(auto_now_add=True)
     last_active = models.DateTimeField(auto_now=True)
     
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = generate_device_id()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"Device {self.device_id} ({self.client.name})"
 
 class Feature(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_feature_id, editable=False)
+    id = models.CharField(max_length=50, primary_key=True, editable=False)
     name = models.CharField(max_length=150, unique=True) # e.g., 'ai_chatbot', 'advanced_reports'
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = generate_feature_id()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
 
 class ClientFeature(models.Model):
-    id = models.CharField(max_length=50, primary_key=True, default=generate_clientfeat_id, editable=False)
+    id = models.CharField(max_length=50, primary_key=True, editable=False)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='client_features')
     feature = models.ForeignKey(Feature, on_delete=models.CASCADE, related_name='client_features')
     enabled = models.BooleanField(default=False)
@@ -967,6 +982,11 @@ class ClientFeature(models.Model):
     class Meta:
         unique_together = ('client', 'feature')
         
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = generate_clientfeat_id()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.client.name} - {self.feature.name}: {'Enabled' if self.enabled else 'Disabled'}"
 
