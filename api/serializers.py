@@ -428,3 +428,31 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = '__all__'
+
+# ──────────────────────────────────────────────────────────────
+# LICENSE & FEATURE FLAG SERIALIZERS
+# ──────────────────────────────────────────────────────────────
+
+from .models import Client, Device, Feature, ClientFeature
+
+class ClientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Client
+        fields = ['id', 'name', 'license_key', 'created_at']
+
+class DeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Device
+        fields = ['id', 'client', 'device_id', 'registered_at', 'last_active']
+
+class FeatureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feature
+        fields = ['id', 'name', 'description']
+
+class ClientFeatureSerializer(serializers.ModelSerializer):
+    feature_name = serializers.CharField(source='feature.name', read_only=True)
+    
+    class Meta:
+        model = ClientFeature
+        fields = ['client', 'feature', 'feature_name', 'enabled', 'updated_at']

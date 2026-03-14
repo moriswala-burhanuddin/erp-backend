@@ -11,7 +11,8 @@ from .views import (
     ProductViewSet, SaleViewSet, CustomerViewSet, register, CategoryViewSet,
     ReviewViewSet, FeedbackViewSet, CartViewSet, get_profile, CartItemViewSet,
     OnlineOrderViewSet, OnlineReturnViewSet, OnlineReportViewSet, verify_email,
-    SaleReturnViewSet, NotificationViewSet
+    SaleReturnViewSet, NotificationViewSet,
+    LicenseVerifyView, EnabledFeaturesView
 )
 
 from .serializers import CustomTokenObtainPairView
@@ -62,4 +63,8 @@ urlpatterns = [
     path('auth/verify-email/<str:uidb64>/<str:token>/', verify_email, name='verify_email'),
     path('auth/profile/', get_profile, name='get_profile'),
     path('auth/refresh', TokenRefreshView.as_view(), name='token_refresh'),
+    
+    # License & Feature Flags
+    path('license/verify/', LicenseVerifyView.as_view(), name='license-verify'),
+    path('license/features/', EnabledFeaturesView.as_view(), name='license-features'),
 ] + router.urls

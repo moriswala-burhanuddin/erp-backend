@@ -6,7 +6,8 @@ from .models import (
     StockTransfer, PurchaseOrder, LoyaltyPoint, Commission,
     Supplier, PaymentTerm, SupplierDocument,
     Receiving, ReceivingItem, SaleReturn, Notification,
-    OnlineOrder, OnlineOrderItem, OnlineReturn
+    OnlineOrder, OnlineOrderItem, OnlineReturn,
+    Client, Device, Feature, ClientFeature
 )
 
 
@@ -153,3 +154,39 @@ class OnlineOrderItemAdmin(admin.ModelAdmin):
 class OnlineReturnAdmin(admin.ModelAdmin):
     list_display = ('order', 'status', 'refund_amount', 'created_at')
     list_filter = ('status', 'created_at')
+
+# ──────────────────────────────────────────────────────────────
+# LICENSE & FEATURE FLAG ADMIN
+# ──────────────────────────────────────────────────────────────
+
+class DeviceInline(admin.TabularInline):
+    model = Device
+    extra = 0
+    readonly_fields = ('registered_at', 'last_active')
+
+class ClientFeatureInline(admin.TabularInline):
+    model = ClientFeature
+    extra = 0
+
+@admin.register(Client)
+class ClientAdmin(admin.ModelAdmin):
+    list_display = ('name', 'license_key', 'created_at')
+    search_fields = ('name', 'license_key')
+    inlines = [DeviceInline, ClientFeatureInline]
+
+@admin.register(Device)
+class DeviceAdmin(admin.ModelAdmin):
+    list_display = ('device_id', 'client', 'registered_at', 'last_active')
+    search_fields = ('device_id', 'client__name')
+    list_filter = ('client',)
+
+@admin.register(Feature)
+class FeatureAdmin(admin.ModelAdmin):
+    list_display = ('name', 'description', 'created_at')
+    search_fields = ('name',)
+
+@admin.register(ClientFeature)
+class ClientFeatureAdmin(admin.ModelAdmin):
+    list_display = ('client', 'feature', 'enabled', 'updated_at')
+    list_filter = ('enabled', 'feature', 'client')
+    search_fields = ('client__name', 'feature__name')

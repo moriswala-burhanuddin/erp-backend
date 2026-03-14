@@ -51,6 +51,11 @@ def generate_fb_id(): return generate_id('fb')
 def generate_ret_id(): return generate_id('ret')
 def generate_nt_id(): return generate_id('nt')
 
+def generate_client_id(): return generate_id('client')
+def generate_device_id(): return generate_id('device')
+def generate_feature_id(): return generate_id('ft')
+def generate_clientfeat_id(): return generate_id('cf')
+
 
 
 class Store(models.Model):
@@ -907,3 +912,77 @@ class OnlineReturn(models.Model):
 
     def __str__(self):
         return f"Return for Order {self.order.order_id} - {self.status}"
+
+# ──────────────────────────────────────────────────────────────
+# LICENSE & FEATURE FLAG MODELS
+# ──────────────────────────────────────────────────────────────
+
+class Client(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_client_id)
+    name = models.CharField(max_length=255)
+    license_key = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return self.name
+
+class Device(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_device_id)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='devices')
+    device_id = models.CharField(max_length=255, unique=True)
+    registered_at = models.DateTimeField(auto_now_add=True)
+    last_active = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Device {self.device_id} ({self.client.name})"
+
+class Feature(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_feature_id)
+    name = models.CharField(max_length=150, unique=True) # e.g., 'ai_chatbot', 'advanced_reports'
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return self.name
+
+class ClientFeature(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_clientfeat_id)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='client_features')
+    feature = models.ForeignKey(Feature, on_delete=models.CASCADE, related_name='client_features')
+    enabled = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('client', 'feature')
+        
+    def __str__(self):
+        return f"{self.client.name} - {self.feature.name}: {'Enabled' if self.enabled else 'Disabled'}"
+
+@receiver(post_save, sender=Feature)
+def create_client_features_for_new_feature(sender, instance, created, **kwargs):
+    """
+    When a new feature is added, automatically create ClientFeature records for all 
+    existing clients and set them to DISABLED by default.
+    """
+    if created:
+        for client in Client.objects.all():
+            ClientFeature.objects.get_or_create(
+                client=client,
+                feature=instance,
+                defaults={'enabled': False}
+            )
+
+@receiver(post_save, sender=Client)
+def create_client_features_for_new_client(sender, instance, created, **kwargs):
+    """
+    When a new client is added, automatically link all existing features and set 
+    them to DISABLED by default.
+    """
+    if created:
+        for feature in Feature.objects.all():
+            ClientFeature.objects.get_or_create(
+                client=instance,
+                feature=feature,
+                defaults={'enabled': False}
+            )

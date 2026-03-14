@@ -1465,8 +1465,106 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return Notification.objects.filter(Q(user=self.request.user) | Q(user=None)).order_by('-created_at')
 
     @action(detail=True, methods=['post'])
-    def mark_read(self, request, pk=None):
         notification = self.get_object()
         notification.is_read = True
         notification.save()
         return Response({'status': 'read'})
+
+# ──────────────────────────────────────────────────────────────
+# LICENSE & FEATURE FLAG VIEWS
+# ──────────────────────────────────────────────────────────────
+
+from .models import Client, Device, ClientFeature
+from .serializers import ClientSerializer
+
+class LicenseVerifyView(APIView):
+    """
+    Endpoint for desktop app to verify its license key and register its device_id.
+    """
+    permission_classes = [AllowAny] # Must be public for first-time boot
+
+    def post(self, request):
+        license_key = request.data.get('license_key')
+        device_id = request.data.get('device_id')
+        
+        if not license_key or not device_id:
+            return Response(
+                {"status": "error", "message": "license_key and device_id are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Find the client by license key
+        try:
+            client = Client.objects.get(license_key=license_key)
+        except Client.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "Invalid License Key."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+            
+        # Register or update the device
+        device, created = Device.objects.get_or_create(
+            client=client, 
+            device_id=device_id
+        )
+        
+        # Update last active
+        device.last_active = timezone.now()
+        device.save()
+        
+        return Response({
+            "status": "success",
+            "message": "License verified successfully.",
+            "client": ClientSerializer(client).data,
+            "device": {"id": device.id, "device_id": device.device_id, "is_new": created}
+        }, status=status.HTTP_200_OK)
+
+
+class EnabledFeaturesView(APIView):
+    """
+    Endpoint to fetch all ENABLED features for a specific client.
+    Can be called using client_id or by passing license_key/device_id headers.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        client_id = request.query_params.get('client_id')
+        
+        # Alternatively, check headers if client_id is not in query params
+        if not client_id:
+            license_key = request.headers.get('X-License-Key')
+            if license_key:
+                try:
+                    client = Client.objects.get(license_key=license_key)
+                    client_id = client.id
+                except Client.DoesNotExist:
+                    pass
+        
+        if not client_id:
+            return Response(
+                {"status": "error", "message": "client_id or X-License-Key header is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Optional: verify device ID if provided (for strict security)
+        device_id = request.headers.get('X-Device-Id')
+        if device_id:
+            if not Device.objects.filter(client_id=client_id, device_id=device_id).exists():
+                return Response(
+                    {"status": "error", "message": "Unregistered Device."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        # Get all enabled features for this client
+        enabled_features = ClientFeature.objects.filter(
+            client_id=client_id, 
+            enabled=True
+        ).select_related('feature')
+        
+        feature_names = [cf.feature.name for cf in enabled_features]
+        
+        return Response({
+            "status": "success",
+            "client_id": client_id,
+            "features": feature_names
+        }, status=status.HTTP_200_OK)
