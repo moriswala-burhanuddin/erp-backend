@@ -164,158 +164,130 @@ class PushEndpoint(APIView):
                         continue
 
                     for row in rows:
-                        # 1. Convert camelCase to snake_case for all keys
-                        row_data = {}
-                        for k, v in row.items():
-                            if k == 'sync_status': continue
-                            # Convert camelCase to snake_case
-                            snake_key = ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_')
-                            row_data[snake_key] = v
-                        
-                        # Debug logging
-                        if table == 'users':
-                            print(f"SYNCING USER: {row_data.get('email')} | Role: {row_data.get('role')} | Active: {row_data.get('is_active')}")
-                        
-                        # Prepare data for update_or_create
-                        
-                        # Ensure password is hashed if provided as plain text
-                        if table == 'users':
-                            # NEVER let password be null or empty string
-                            if not row_data.get('password'):
-                                from django.contrib.auth.hashers import make_password
-                                row_data['password'] = make_password('ChangeMe123!')
-                                print(f"DEBUG: Setting default password for {row_data.get('email')}")
-                            elif not row_data['password'].startswith(('pbkdf2_', 'bcrypt', '$2b$', '$2a$', 'argon2')):
-                                from django.contrib.auth.hashers import make_password
-                                row_data['password'] = make_password(row_data['password'])
-                                print(f"DEBUG: Hashing plain-text password for {row_data.get('email')}")
-                                
-                            if 'email' in row_data and not row_data.get('username'):
-                                row_data['username'] = row_data['email']
-
-                            # Normalize roles: default to staff if invalid
-                            valid_roles = [c[0] for c in model._meta.get_field('role').choices]
-                            if row_data.get('role') not in valid_roles:
-                                print(f"DEBUG: Normalizing role '{row_data.get('role')}' to 'staff' for {row_data.get('email')}")
-                                row_data['role'] = 'staff'
-
-                            # Ensure is_active is True for synced users
-                            if 'is_active' not in row_data:
-                                row_data['is_active'] = True
-                            
-                            # Admin-created users in ERP are pre-verified
-                            row_data['is_verified'] = True
-
-                            # [PROMOTION LOGIC] Grant Django admin access for admin roles
-                            if row_data.get('role') in ['admin', 'super_admin']:
-                                row_data['is_staff'] = True
-                                row_data['is_superuser'] = True
-                                print(f"DEBUG: Promoting {row_data.get('email')} to STAFF/SUPERUSER")
-
-                            # Split name into first and last name
-                            if 'name' in row_data:
-                                name_parts = row_data['name'].split(' ', 1)
-                                row_data['first_name'] = name_parts[0]
-                                row_data['last_name'] = name_parts[1] if len(name_parts) > 1 else ''
-
-                        # Filter out any fields that don't exist in the Django model
-                        valid_fields = {f.name for f in model._meta.get_fields() if not (f.is_relation and not f.concrete)}
-                        # Also allow attnames (like store_id)
-                        valid_fields.update({getattr(f, 'attname', None) for f in model._meta.get_fields()})
-                        
-                        # Normalize data: filter non-existent fields and treat empty strings/None appropriately
-                        cleaned_data = {}
-                        for k, v in row_data.items():
-                            if k not in valid_fields:
-                                continue
-                            
-                            # Determine if the field allows NULL
-                            field_obj = next((f for f in model._meta.get_fields() if f.name == k or getattr(f, 'attname', None) == k), None)
-                            is_nullable = getattr(field_obj, 'null', False)
-                            internal_type = field_obj.get_internal_type() if field_obj else ""
-
-                            if v == "" or v is None:
-                                if is_nullable:
-                                    cleaned_data[k] = None
-                                elif internal_type in ['CharField', 'TextField']:
-                                    cleaned_data[k] = ""
-                                else:
-                                    cleaned_data[k] = v
-                            else:
-                                # Format conversion for Date/Time fields from ISO strings
-                                if internal_type == 'TimeField' and 'T' in str(v):
-                                    try:
-                                        cleaned_data[k] = str(v).split('T')[1].split('.')[0]
-                                    except Exception:
-                                        cleaned_data[k] = v
-                                elif internal_type == 'DateField' and 'T' in str(v):
-                                    cleaned_data[k] = str(v).split('T')[0]
-                                else:
-                                    cleaned_data[k] = v
-                        
-                        # Defensively ensure first/last name are never None for Users
-                        if table == 'users':
-                            if cleaned_data.get('first_name') is None: cleaned_data['first_name'] = ""
-                            if cleaned_data.get('last_name') is None: cleaned_data['last_name'] = ""
-                        
-                        # Debug: Print what we are about to save for users specifically
-                        if table == 'users':
-                            print(f"DEBUG: Cleaned User Data for {cleaned_data.get('email')}: {list(cleaned_data.keys())}")
-                            if 'password' not in cleaned_data or cleaned_data.get('password') is None:
-                                print(f"CRITICAL: PASSWORD STILL MISSING FOR {cleaned_data.get('email')}!")
-                                # One last fallback to avoid 400
-                                from django.contrib.auth.hashers import make_password
-                                cleaned_data['password'] = make_password('ChangeMe123!')
-
-                        obj_id = cleaned_data.pop('id')
                         try:
-                            # Pre-check: validate required FK fields are present before saving
-                            required_fk_fields = [
-                                f.attname for f in model._meta.get_fields()
-                                if hasattr(f, 'attname') and f.is_relation
-                                and not getattr(f, 'null', True)
-                                and f.concrete
-                            ]
-                            missing_fks = [fk for fk in required_fk_fields if cleaned_data.get(fk) is None]
-                            if missing_fks:
-                                print(f"SKIPPING {table} row {obj_id}: Missing required FK fields: {missing_fks}")
-                                continue
+                            # Use nested transaction to allow skipping single row failures
+                            with transaction.atomic():
+                                # 1. Convert camelCase to snake_case for all keys
+                                row_data = {}
+                                for k, v in row.items():
+                                    if k == 'sync_status': continue
+                                    # Convert camelCase to snake_case
+                                    snake_key = ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_')
+                                    row_data[snake_key] = v
+                                
+                                # Debug logging
+                                if table == 'users':
+                                    print(f"SYNCING USER: {row_data.get('email')} | Role: {row_data.get('role')} | Active: {row_data.get('is_active')}")
+                                
+                                # Prepare data for update_or_create
+                                
+                                # Ensure password is hashed if provided as plain text
+                                if table == 'users':
+                                    if not row_data.get('password'):
+                                        from django.contrib.auth.hashers import make_password
+                                        row_data['password'] = make_password('ChangeMe123!')
+                                    elif not row_data['password'].startswith(('pbkdf2_', 'bcrypt', '$2b$', '$2a$', 'argon2')):
+                                        from django.contrib.auth.hashers import make_password
+                                        row_data['password'] = make_password(row_data['password'])
+                                        
+                                    if 'email' in row_data and not row_data.get('username'):
+                                        row_data['username'] = row_data['email']
 
-                            # Special handling for users: Reconcile by email if ID doesn't match
-                            if table == 'users' and 'email' in cleaned_data:
-                                email = cleaned_data.get('email')
-                                existing_user = User.objects.filter(email=email).first()
-                                if existing_user:
-                                    print(f"DEBUG: Found existing user by email: {email}. Updating record (protecting password)...")
-                                    # Protect existing password if the incoming one is the placeholder
-                                    incoming_password = cleaned_data.get('password')
-                                    from django.contrib.auth.hashers import check_password
+                                    # Normalize roles: default to staff if invalid
+                                    valid_roles = [c[0] for c in model._meta.get_field('role').choices]
+                                    if row_data.get('role') not in valid_roles:
+                                        row_data['role'] = 'staff'
+
+                                    if 'is_active' not in row_data:
+                                        row_data['is_active'] = True
                                     
-                                    is_placeholder = False
-                                    if incoming_password:
-                                        try:
-                                            # If incoming matches placeholder, it's definitely a placeholder
-                                            is_placeholder = check_password('ChangeMe123!', incoming_password)
-                                        except: pass
+                                    row_data['is_verified'] = True
 
-                                    for key, value in cleaned_data.items():
-                                        if key == 'password' and is_placeholder:
-                                            continue # Keep existing password
-                                        setattr(existing_user, key, value)
-                                    existing_user.save()
-                                    obj, created = existing_user, False
+                                    if row_data.get('role') in ['admin', 'super_admin']:
+                                        row_data['is_staff'] = True
+                                        row_data['is_superuser'] = True
+
+                                    if 'name' in row_data:
+                                        name_parts = row_data['name'].split(' ', 1)
+                                        row_data['first_name'] = name_parts[0]
+                                        row_data['last_name'] = name_parts[1] if len(name_parts) > 1 else ''
+
+                                valid_fields = {f.name for f in model._meta.get_fields() if not (f.is_relation and not f.concrete)}
+                                valid_fields.update({getattr(f, 'attname', None) for f in model._meta.get_fields()})
+                                
+                                cleaned_data = {}
+                                for k, v in row_data.items():
+                                    if k not in valid_fields:
+                                        continue
+                                    
+                                    field_obj = next((f for f in model._meta.get_fields() if f.name == k or getattr(f, 'attname', None) == k), None)
+                                    is_nullable = getattr(field_obj, 'null', False)
+                                    internal_type = field_obj.get_internal_type() if field_obj else ""
+
+                                    if v == "" or v is None:
+                                        if is_nullable:
+                                            cleaned_data[k] = None
+                                        elif internal_type in ['CharField', 'TextField']:
+                                            cleaned_data[k] = ""
+                                        else:
+                                            cleaned_data[k] = v
+                                    else:
+                                        if internal_type == 'TimeField' and 'T' in str(v):
+                                            try:
+                                                cleaned_data[k] = str(v).split('T')[1].split('.')[0]
+                                            except Exception:
+                                                cleaned_data[k] = v
+                                        elif internal_type == 'DateField' and 'T' in str(v):
+                                            cleaned_data[k] = str(v).split('T')[0]
+                                        else:
+                                            cleaned_data[k] = v
+                                
+                                if table == 'users':
+                                    if cleaned_data.get('first_name') is None: cleaned_data['first_name'] = ""
+                                    if cleaned_data.get('last_name') is None: cleaned_data['last_name'] = ""
+                                
+                                obj_id = cleaned_data.pop('id')
+                                
+                                required_fk_fields = [
+                                    f.attname for f in model._meta.get_fields()
+                                    if hasattr(f, 'attname') and f.is_relation
+                                    and not getattr(f, 'null', True)
+                                    and f.concrete
+                                ]
+                                missing_fks = [fk for fk in required_fk_fields if cleaned_data.get(fk) is None]
+                                if missing_fks:
+                                    print(f"SKIPPING {table} row {obj_id}: Missing required FK fields: {missing_fks}")
+                                    continue
+
+                                if table == 'users' and 'email' in cleaned_data:
+                                    email = cleaned_data.get('email')
+                                    existing_user = User.objects.filter(email=email).first()
+                                    if existing_user:
+                                        incoming_password = cleaned_data.get('password')
+                                        from django.contrib.auth.hashers import check_password
+                                        is_placeholder = False
+                                        if incoming_password:
+                                            try:
+                                                is_placeholder = check_password('ChangeMe123!', incoming_password)
+                                            except: pass
+
+                                        for key, value in cleaned_data.items():
+                                            if key == 'password' and is_placeholder:
+                                                continue
+                                            setattr(existing_user, key, value)
+                                        existing_user.save()
+                                        obj, created = existing_user, False
+                                    else:
+                                        obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 else:
                                     obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
-                            else:
-                                obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
-                            
-                            print(f"SAVED {table} {obj_id}: Created={created}, is_deleted={getattr(obj, 'is_deleted', 'N/A')}")
-                            synced_ids[table].append(obj_id)
+                                
+                                print(f"SAVED {table} {obj_id}: Created={created}")
+                                synced_ids[table].append(obj_id)
                         except Exception as row_error:
-                            print(f"SKIPPING {table} row {obj_id} due to error: {str(row_error)}")
-                            print(f"Row Data: {cleaned_data}")
-                            # Skip this row (don't abort the whole sync for bad seed data)
+                            print(f"SKIPPING {table} due to error: {str(row_error)}")
                             continue
+
                     
                 for table in ORDER:
                     if table not in payload: continue
