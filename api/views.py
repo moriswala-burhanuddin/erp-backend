@@ -248,16 +248,22 @@ class PushEndpoint(APIView):
                                 
                                 obj_id = cleaned_data.pop('id')
                                 
-                                required_fk_fields = [
-                                    f.attname for f in model._meta.get_fields()
-                                    if hasattr(f, 'attname') and f.is_relation
-                                    and not getattr(f, 'null', True)
-                                    and f.concrete
-                                ]
-                                missing_fks = [fk for fk in required_fk_fields if cleaned_data.get(fk) is None]
-                                if missing_fks:
-                                    print(f"SKIPPING {table} row {obj_id}: Missing required FK fields: {missing_fks}")
-                                    continue
+                                # PROACTIVE FK VALIDATION
+                                from django.db import IntegrityError
+                                relationships = [f for f in model._meta.get_fields() if f.is_relation and f.concrete]
+                                for rel in relationships:
+                                    fk_field = getattr(rel, 'attname', None)
+                                    if not fk_field: continue
+                                    fk_value = cleaned_data.get(fk_field)
+                                    if fk_value:
+                                        target_model = rel.related_model
+                                        if not target_model.objects.filter(id=fk_value).exists():
+                                            if getattr(rel, 'null', False):
+                                                print(f"DEBUG: Nullifying {table}.{fk_field} because {fk_value} is missing")
+                                                cleaned_data[fk_field] = None
+                                            else:
+                                                # If it's required, we must skip this record or it will crash the DB
+                                                raise IntegrityError(f"Required relationship {fk_value} missing for {table}.{fk_field}")
 
                                 if table == 'users' and 'email' in cleaned_data:
                                     email = cleaned_data.get('email')
@@ -285,33 +291,24 @@ class PushEndpoint(APIView):
                                 print(f"SAVED {table} {obj_id}: Created={created}")
                                 synced_ids[table].append(obj_id)
                         except Exception as row_error:
-                            print(f"SKIPPING {table} due to error: {str(row_error)}")
+                            print(f"SKIPPING {table} row {obj_id} due to error: {str(row_error)}")
                             continue
-
-                    
-                for table in ORDER:
-                    if table not in payload: continue
-                    
-                    # If we reach here, we processed rows. We should mark them as synced in the response even if one table failed?
-                    # No, transaction.atomic() handles the rollback.
 
             return Response({
                 "status": "success",
-                "synced_ids": synced_ids
+                "synced_ids": synced_ids,
+                "sync_version": "1.0.3-Robust-FK"
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
             import traceback
             traceback.print_exc()
             error_msg = str(e)
-            print(f"SYNC ERROR: {error_msg}")
-            # If it's a migration error, let the user know
-            if "no such table" in error_msg.lower():
-                error_msg = f"Database out of sync: {error_msg}. Please run migrations on the server."
-            
+            print(f"SYNC FATAL ERROR: {error_msg}")
             return Response({
                 "status": "error",
-                "message": error_msg
+                "message": error_msg,
+                "sync_version": "1.0.3-Robust-FK-FAILED"
             }, status=status.HTTP_400_BAD_REQUEST)
 
     def get_model(self, table_name):
