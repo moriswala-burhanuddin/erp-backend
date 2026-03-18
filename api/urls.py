@@ -12,7 +12,7 @@ from .views import (
     ReviewViewSet, FeedbackViewSet, CartViewSet, get_profile, CartItemViewSet,
     OnlineOrderViewSet, OnlineReturnViewSet, OnlineReportViewSet, verify_email,
     SaleReturnViewSet, NotificationViewSet,
-    LicenseVerifyView, EnabledFeaturesView, SeedFeaturesView
+    LicenseVerifyView, EnabledFeaturesView
 )
 
 from .serializers import CustomTokenObtainPairView
