@@ -159,6 +159,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Razorpay Configuration
 RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='rzp_test_RkIqS6NBhGBvNP')
+
+# Sync Configuration
+ALLOW_BOOTSTRAP_SYNC = config('ALLOW_BOOTSTRAP_SYNC', default=False, cast=bool)
 RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='R6NhkQ1ajPrZOFbP694hZEcD')
 
 # Email Configuration

@@ -54,6 +54,7 @@ router.register(r'store/cart', CartViewSet, basename='cart')
 urlpatterns = [
     path('sync/push', PushEndpoint.as_view(), name='sync-push'),
     path('sync/pull', PullEndpoint.as_view(), name='sync-pull'),
+    path('diagnostic/', db_diagnostic, name='diagnostic'),
     path('health', health_check, name='health'),
     path('db-diagnostic', db_diagnostic, name='db-diagnostic'),
     

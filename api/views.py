@@ -94,10 +94,15 @@ def db_diagnostic(request):
     # Check migrations
     from django.db.migrations.recorder import MigrationRecorder
     applied_migrations = MigrationRecorder.Migration.objects.filter(app='api').values_list('name', flat=True)
+    diagnostic["migrations"] = list(applied_migrations)
+
     from django.contrib.auth import get_user_model
     User = get_user_model()
     diagnostic["superuser_exists"] = User.objects.filter(is_superuser=True).exists()
     diagnostic["bootstrap_header_received"] = request.headers.get('X-Bootstrap-Auth')
+    
+    from django.conf import settings
+    diagnostic["allow_bootstrap_sync"] = getattr(settings, 'ALLOW_BOOTSTRAP_SYNC', False)
             
     return Response(diagnostic)
 from rest_framework import permissions
@@ -107,8 +112,7 @@ class AllowBootstrapSync(permissions.BasePermission):
     Custom permission for bootstrapping the initial sync.
     Allows sync (push/pull) if:
     1. The user is a real JWT-authenticated user (normal flow).
-    2. OR, the request has the 'X-Bootstrap-Auth' header AND the database currently HAS NO Superusers.
-    This allows the FIRST Super Admin created in Electron to push themselves to the cloud.
+    2. OR, the request has the 'X-Bootstrap-Auth' header AND (No Superusers exist OR ALLOW_BOOTSTRAP_SYNC is True).
     """
     def has_permission(self, request, view):
         # 1. Standard JWT authentication
@@ -116,12 +120,15 @@ class AllowBootstrapSync(permissions.BasePermission):
             return True
         
         # 2. Bootstrap check
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        
         bootstrap_header = request.headers.get('X-Bootstrap-Auth')
         if bootstrap_header == 'super-admin-init':
-            # ONLY allow if NO superusers exist in the database yet
+            from django.conf import settings
+            if getattr(settings, 'ALLOW_BOOTSTRAP_SYNC', False):
+                print("[AUTH] BOOTSTRAP SYNC ALLOWED: ALLOW_BOOTSTRAP_SYNC is True.")
+                return True
+
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
             if not User.objects.filter(is_superuser=True).exists():
                 print("[AUTH] BOOTSTRAP SYNC ALLOWED: No superusers found in DB.")
                 return True
