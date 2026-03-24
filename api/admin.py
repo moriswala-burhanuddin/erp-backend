@@ -7,7 +7,8 @@ from .models import (
     Supplier, PaymentTerm, SupplierDocument,
     Receiving, ReceivingItem, SaleReturn, Notification,
     OnlineOrder, OnlineOrderItem, OnlineReturn,
-    Client, Device, Feature, ClientFeature
+    Client, Device, Feature, ClientFeature,
+    Employee, Attendance, Leave, Payroll, PerformanceReview
 )
 
 
@@ -199,3 +200,31 @@ class ClientFeatureAdmin(admin.ModelAdmin):
     list_filter = ('enabled', 'feature', 'client')
     readonly_fields = ('id', 'updated_at')
     search_fields = ('client__name', 'feature__name', 'id')
+@admin.register(Employee)
+class EmployeeAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user_email', 'department', 'designation', 'store', 'is_deleted')
+    search_fields = ('id', 'user__email', 'department', 'designation')
+    list_filter = ('department', 'store', 'is_deleted')
+
+    def user_email(self, obj):
+        return obj.user.email if obj.user else "N/A"
+
+@admin.register(Attendance)
+class AttendanceAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'date', 'status', 'check_in', 'check_out')
+    list_filter = ('status', 'date')
+
+@admin.register(Leave)
+class LeaveAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'type', 'start_date', 'end_date', 'status')
+    list_filter = ('status', 'type')
+
+@admin.register(Payroll)
+class PayrollAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'month', 'year', 'net_salary', 'status')
+    list_filter = ('status', 'year', 'month')
+
+@admin.register(PerformanceReview)
+class PerformanceReviewAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'reviewer', 'date', 'rating')
+    list_filter = ('rating', 'date')
