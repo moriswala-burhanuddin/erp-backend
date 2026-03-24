@@ -176,3 +176,6 @@ ADMINS = [('Moris', 'fitprojectsbymoris@gmail.com')]
 
 # Frontend URL for email verification
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+if not DEBUG and FRONTEND_URL == 'http://localhost:5173':
+    # Fallback for production if forgot to set env var
+    FRONTEND_URL = 'https://online-store-with-erp-demo.netlify.app'

@@ -1248,7 +1248,15 @@ def register(request):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         
         # The frontend URL for verification
-        verify_url = f"{settings.FRONTEND_URL}/verify-email/{uid}/{token}"
+        frontend_url = settings.FRONTEND_URL
+        
+        # Smart fallback: If the request came from a non-localhost origin but our 
+        # configuration is still pointing to localhost, use the origin instead.
+        origin = request.headers.get('Origin')
+        if origin and 'localhost' not in origin and 'localhost' in frontend_url:
+            frontend_url = origin.rstrip('/')
+            
+        verify_url = f"{frontend_url}/verify-email/{uid}/{token}"
         
         subject = "Verify your Elegance account"
         message = f"Hi {user.first_name or user.username},\n\nPlease verify your email by clicking the link below:\n\n{verify_url}\n\nIf you did not register, please ignore this email."
