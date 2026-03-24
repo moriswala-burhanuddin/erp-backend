@@ -179,3 +179,6 @@ FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 if not DEBUG and FRONTEND_URL == 'http://localhost:5173':
     # Fallback for production if forgot to set env var
     FRONTEND_URL = 'https://online-store-with-erp-demo.netlify.app'
+
+# Registration Settings
+REQUIRE_EMAIL_VERIFICATION = config('REQUIRE_EMAIL_VERIFICATION', default=True, cast=bool)

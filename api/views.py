@@ -1240,38 +1240,48 @@ def register(request):
     serializer = UserRegistrationSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save()
-        user.is_active = False # Deactivate until verified
-        user.save()
         
-        # Email Verification Logic
-        token = default_token_generator.make_token(user)
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        # Check if email verification is required
+        require_verification = getattr(settings, 'REQUIRE_EMAIL_VERIFICATION', True)
         
-        # The frontend URL for verification
-        frontend_url = settings.FRONTEND_URL
-        
-        # Smart fallback: If the request came from a non-localhost origin but our 
-        # configuration is still pointing to localhost, use the origin instead.
-        origin = request.headers.get('Origin')
-        if origin and 'localhost' not in origin and 'localhost' in frontend_url:
-            frontend_url = origin.rstrip('/')
+        if not require_verification:
+            user.is_active = True
+            user.is_verified = True
+            user.save()
+            print(f"Auto-activated user: {user.email} (Email verification bypassed)")
+        else:
+            user.is_active = False # Deactivate until verified
+            user.save()
             
-        verify_url = f"{frontend_url}/verify-email/{uid}/{token}"
-        
-        subject = "Verify your Elegance account"
-        message = f"Hi {user.first_name or user.username},\n\nPlease verify your email by clicking the link below:\n\n{verify_url}\n\nIf you did not register, please ignore this email."
-        
-        try:
-            send_mail(
-                subject,
-                message,
-                settings.EMAIL_HOST_USER,
-                [user.email],
-                fail_silently=False,
-            )
-            print(f"Verification email sent to {user.email}")
-        except Exception as e:
-            print(f"Failed to send verification email: {e}")
+            # Email Verification Logic
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            
+            # The frontend URL for verification
+            frontend_url = settings.FRONTEND_URL
+            
+            # Smart fallback: If the request came from a non-localhost origin but our 
+            # configuration is still pointing to localhost, use the origin instead.
+            origin = request.headers.get('Origin')
+            if origin and 'localhost' not in origin and 'localhost' in frontend_url:
+                frontend_url = origin.rstrip('/')
+                
+            verify_url = f"{frontend_url}/verify-email/{uid}/{token}"
+            
+            subject = "Verify your Elegance account"
+            message = f"Hi {user.first_name or user.username},\n\nPlease verify your email by clicking the link below:\n\n{verify_url}\n\nIf you did not register, please ignore this email."
+            
+            try:
+                send_mail(
+                    subject,
+                    message,
+                    settings.EMAIL_HOST_USER,
+                    [user.email],
+                    fail_silently=False,
+                )
+                print(f"Verification email sent to {user.email}")
+            except Exception as e:
+                print(f"Failed to send verification email: {e}")
         
         # Create a Customer record for this new user so they appear in the ERP
         from .models import Customer, Store
