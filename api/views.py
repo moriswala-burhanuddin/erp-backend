@@ -97,9 +97,38 @@ def db_diagnostic(request):
     diagnostic["migrations"] = list(applied_migrations)
             
     return Response(diagnostic)
+from rest_framework import permissions
+
+class AllowBootstrapSync(permissions.BasePermission):
+    """
+    Custom permission for bootstrapping the initial sync.
+    Allows sync (push/pull) if:
+    1. The user is a real JWT-authenticated user (normal flow).
+    2. OR, the request has the 'X-Bootstrap-Auth' header AND the database currently HAS NO Superusers.
+    This allows the FIRST Super Admin created in Electron to push themselves to the cloud.
+    """
+    def has_permission(self, request, view):
+        # 1. Standard JWT authentication
+        if request.user and request.user.is_authenticated:
+            return True
+        
+        # 2. Bootstrap check
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        bootstrap_header = request.headers.get('X-Bootstrap-Auth')
+        if bootstrap_header == 'super-admin-init':
+            # ONLY allow if NO superusers exist in the database yet
+            if not User.objects.filter(is_superuser=True).exists():
+                print("[AUTH] BOOTSTRAP SYNC ALLOWED: No superusers found in DB.")
+                return True
+            else:
+                print("[AUTH] BOOTSTRAP SYNC DENIED: Superusers already exist in DB.")
+        
+        return False
 
 class PushEndpoint(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowBootstrapSync | permissions.IsAuthenticated]
 
     def post(self, request):
         data = request.data
@@ -366,7 +395,7 @@ class PushEndpoint(APIView):
         return model_mapping.get(table_name)
 
 class PullEndpoint(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowBootstrapSync | permissions.IsAuthenticated]
 
     def post(self, request):
         try:
