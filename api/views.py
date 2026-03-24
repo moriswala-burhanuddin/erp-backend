@@ -206,7 +206,10 @@ class PushEndpoint(APIView):
                     rows = payload[table]
                     model = self.get_model(table)
                     if not model:
+                        print(f"DEBUG: Model NOT FOUND for table {table}")
                         continue
+                    
+                    print(f"DEBUG: Processing {len(rows)} rows for table {table}")
 
                     for row in rows:
                         obj_id = row.get('id', 'unknown')
@@ -366,7 +369,9 @@ class PushEndpoint(APIView):
                                 print(f"SAVED {table} {obj_id}: Created={created}")
                                 synced_ids[table].append(obj_id)
                         except Exception as row_error:
-                            print(f"SKIPPING {table} row {obj_id} due to error: {str(row_error)}")
+                            import traceback
+                            print(f"CRITICAL ERROR syncing {table} row {obj_id}: {str(row_error)}")
+                            traceback.print_exc()
                             continue
 
             return Response({
