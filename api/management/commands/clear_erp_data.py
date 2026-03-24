@@ -12,7 +12,7 @@ class Command(BaseCommand):
         self.stdout.write("Starting ERP data cleanup...")
         
         # 1. Keep 3 Products
-        recent_product_ids = Product.objects.order_by('-created_at')[:3].values_list('id', flat=True)
+        recent_product_ids = Product.objects.order_by('-updated_at')[:3].values_list('id', flat=True)
         products_deleted, _ = Product.objects.exclude(id__in=recent_product_ids).delete()
         self.stdout.write(f"Cleared {products_deleted} products (kept 3).")
 
