@@ -3,6 +3,9 @@
 from django.db import migrations
 
 
+import random
+import string
+
 def seed_features(apps, schema_editor):
     Feature = apps.get_model('api', 'Feature')
     ai_features = [
@@ -15,7 +18,9 @@ def seed_features(apps, schema_editor):
         ("HR Assistant", "A dedicated policy-aware chatbot for staff."),
     ]
     for name, desc in ai_features:
-        Feature.objects.get_or_create(name=name, defaults={'description': desc})
+        if not Feature.objects.filter(name=name).exists():
+            random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=9))
+            Feature.objects.create(id=f"ft-{random_str}", name=name, description=desc)
 
 class Migration(migrations.Migration):
 

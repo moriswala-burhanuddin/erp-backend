@@ -175,42 +175,52 @@ class PushEndpoint(APIView):
                                     snake_key = ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_')
                                     row_data[snake_key] = v
                                 
-                                # Debug logging
+                                # Ensure password is handled correctly
                                 if table == 'users':
-                                    print(f"SYNCING USER: {row_data.get('email')} | Role: {row_data.get('role')} | Active: {row_data.get('is_active')}")
-                                
-                                # Prepare data for update_or_create
-                                
-                                # Ensure password is hashed if provided as plain text
-                                if table == 'users':
-                                    if not row_data.get('password'):
-                                        from django.contrib.auth.hashers import make_password
-                                        row_data['password'] = make_password('ChangeMe123!')
-                                    elif not row_data['password'].startswith(('pbkdf2_', 'bcrypt', '$2b$', '$2a$', 'argon2')):
-                                        from django.contrib.auth.hashers import make_password
-                                        row_data['password'] = make_password(row_data['password'])
-                                        
-                                    if 'email' in row_data and not row_data.get('username'):
-                                        row_data['username'] = row_data['email']
-
-                                    # Normalize roles: default to staff if invalid
-                                    valid_roles = [c[0] for c in model._meta.get_field('role').choices]
-                                    if row_data.get('role') not in valid_roles:
-                                        row_data['role'] = 'staff'
-
-                                    if 'is_active' not in row_data:
-                                        row_data['is_active'] = True
+                                    incoming_password = row_data.get('password')
+                                    is_new_user = not User.objects.filter(email=row_data.get('email')).exists()
                                     
-                                    row_data['is_verified'] = True
+                                    if not incoming_password:
+                                        if is_new_user:
+                                            from django.contrib.auth.hashers import make_password
+                                            row_data['password'] = make_password('ChangeMe123!')
+                                        else:
+                                            # For existing users, if password is not provided, don't update it
+                                            row_data.pop('password', None)
+                                    elif not incoming_password.startswith(('pbkdf2_', 'bcrypt', '$2b$', '$2a$', 'argon2')):
+                                        # Only hash if it's plain text and not a placeholder
+                                        if incoming_password not in ['', '********']:
+                                            from django.contrib.auth.hashers import make_password
+                                            row_data['password'] = make_password(incoming_password)
+                                        else:
+                                            row_data.pop('password', None)
 
-                                    if row_data.get('role') in ['admin', 'super_admin']:
-                                        row_data['is_staff'] = True
-                                        row_data['is_superuser'] = True
+                                # Debug logging
+                                if table in ['users', 'products', 'customers', 'sales']:
+                                    print(f"SYNCING {table.upper()}: {row_data.get('id')} | Deleted: {row_data.get('is_deleted')} | Email/Name: {row_data.get('email') or row_data.get('name')}")
+                                       
+                                if 'email' in row_data and not row_data.get('username'):
+                                    row_data['username'] = row_data['email']
 
-                                    if 'name' in row_data:
-                                        name_parts = row_data['name'].split(' ', 1)
-                                        row_data['first_name'] = name_parts[0]
-                                        row_data['last_name'] = name_parts[1] if len(name_parts) > 1 else ''
+                                # Normalize roles: default to staff if invalid
+                                valid_roles = [c[0] for c in model._meta.get_field('role').choices]
+                                if row_data.get('role') not in valid_roles:
+                                    row_data['role'] = 'staff'
+
+                                if 'is_active' not in row_data:
+                                    row_data['is_active'] = True
+                            
+                                row_data['is_verified'] = True
+
+                                incoming_role = (row_data.get('role') or 'user').lower()
+                                if incoming_role in ['admin', 'super_admin']:
+                                    row_data['is_staff'] = True
+                                    row_data['is_superuser'] = True
+
+                                if 'name' in row_data:
+                                    name_parts = row_data['name'].split(' ', 1)
+                                    row_data['first_name'] = name_parts[0]
+                                    row_data['last_name'] = name_parts[1] if len(name_parts) > 1 else ''
 
                                 valid_fields = {f.name for f in model._meta.get_fields() if not (f.is_relation and not f.concrete)}
                                 valid_fields.update({getattr(f, 'attname', None) for f in model._meta.get_fields()})
@@ -482,7 +492,7 @@ class PullEndpoint(APIView):
                 else:
                      queryset = model.objects.all()
 
-                if last_sync and model not in [Store, User, ExpenseCategory, TaxSlab]:
+                if last_sync:
                     # Generic filter field is updated_at, but some tables might use created_at or uploaded_at
                     if table in ['stock_logs', 'loyalty_points', 'commissions', 'supplier_transactions', 'cheques']:
                         filter_field = 'created_at'
@@ -499,7 +509,7 @@ class PullEndpoint(APIView):
                         row_data = {}
                         for field in obj._meta.fields:
                             if field.name in [
-                                'password', 'is_superuser', 'is_staff', 'is_active', 
+                                'password', 
                                 'date_joined', 'groups', 'user_permissions', 'last_login', 
                                 'username', 'first_name', 'last_name'
                             ]:
@@ -548,8 +558,6 @@ class PullEndpoint(APIView):
                             row_data['name'] = f"{obj.first_name} {obj.last_name}".strip()
                             if not row_data['name']:
                                  row_data['name'] = obj.username
-                            if row_data.get('role') == 'staff':
-                                row_data['role'] = 'user'
 
                         rows.append(row_data)
                     

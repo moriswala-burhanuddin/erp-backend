@@ -120,6 +120,7 @@ class Account(models.Model):
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='accounts')
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 class Category(models.Model):
@@ -176,6 +177,7 @@ class Customer(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='customers')
     joined_at = models.DateTimeField(null=True, blank=True)
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 @receiver(post_save, sender=Customer)
@@ -239,6 +241,7 @@ class Sale(models.Model):
     date = models.DateTimeField()
     quotation_id = models.CharField(max_length=50, null=True, blank=True)
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 class SalePayment(models.Model):
@@ -423,6 +426,7 @@ class Purchase(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
     date = models.DateTimeField()
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 class StockLog(models.Model):
@@ -468,6 +472,7 @@ class Transaction(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
     date = models.DateTimeField()
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 class ExpenseCategory(models.Model):
