@@ -283,26 +283,32 @@ class PushEndpoint(APIView):
                                         continue
                                     
                                     field_obj = next((f for f in model._meta.get_fields() if f.name == k or getattr(f, 'attname', None) == k), None)
+                                    
+                                    # If it's a relationship, use the attname (e.g. category_id) for assignment
+                                    effective_key = k
+                                    if field_obj and field_obj.is_relation and field_obj.concrete:
+                                        effective_key = getattr(field_obj, 'attname', k)
+
                                     is_nullable = getattr(field_obj, 'null', False)
                                     internal_type = field_obj.get_internal_type() if field_obj else ""
 
                                     if v == "" or v is None:
                                         if is_nullable:
-                                            cleaned_data[k] = None
+                                            cleaned_data[effective_key] = None
                                         elif internal_type in ['CharField', 'TextField']:
-                                            cleaned_data[k] = ""
+                                            cleaned_data[effective_key] = ""
                                         else:
-                                            cleaned_data[k] = v
+                                            cleaned_data[effective_key] = v
                                     else:
                                         if internal_type == 'TimeField' and 'T' in str(v):
                                             try:
-                                                cleaned_data[k] = str(v).split('T')[1].split('.')[0]
+                                                cleaned_data[effective_key] = str(v).split('T')[1].split('.')[0]
                                             except Exception:
-                                                cleaned_data[k] = v
+                                                cleaned_data[effective_key] = v
                                         elif internal_type == 'DateField' and 'T' in str(v):
-                                            cleaned_data[k] = str(v).split('T')[0]
+                                            cleaned_data[effective_key] = str(v).split('T')[0]
                                         else:
-                                            cleaned_data[k] = v
+                                            cleaned_data[effective_key] = v
                                 
                                 if table == 'users':
                                     if cleaned_data.get('first_name') is None: cleaned_data['first_name'] = ""
@@ -318,16 +324,32 @@ class PushEndpoint(APIView):
                                     if not fk_field: continue
                                     fk_value = cleaned_data.get(fk_field)
                                     
-                                    # Translate FK using id_mapping if needed
+                                    # Try to resolve ID via mapping first
                                     if fk_value in id_mapping:
-                                        new_fk = id_mapping[fk_value]
-                                        print(f"DEBUG: Translating {table}.{fk_field} from {fk_value} to {new_fk}")
-                                        cleaned_data[fk_field] = new_fk
-                                        fk_value = new_fk
+                                        print(f"[SYNC] Translating FK {fk_field}: {fk_value} -> {id_mapping[fk_value]}")
+                                        fk_value = id_mapping[fk_value]
+                                        cleaned_data[fk_field] = fk_value
 
-                                    if fk_value:
+                                    # Validation: If it's a required field, check if it exists on server
+                                    # Relaxed check: also try to find by Name if it's a string name
+                                    if fk_value and not rel.related_model.objects.filter(id=fk_value).exists():
                                         target_model = rel.related_model
-                                        if not target_model.objects.filter(id=fk_value).exists():
+                                        # Recovery: Search by name/company_name
+                                        potential_match = None
+                                        search_fields = ['name', 'company_name', 'full_name', 'username']
+                                        for search_field in search_fields:
+                                            try:
+                                                if search_field in [f.name for f in target_model._meta.get_fields()]:
+                                                    potential_match = target_model.objects.filter(**{search_field: fk_value}).first()
+                                                    if potential_match: break
+                                            except: continue
+                                        
+                                        if potential_match:
+                                            print(f"[SYNC] Resolved FK {fk_field} '{fk_value}' to existing record {potential_match.id}")
+                                            id_mapping[fk_value] = potential_match.id # Cache the name-to-ID mapping
+                                            fk_value = potential_match.id
+                                            cleaned_data[fk_field] = fk_value
+                                        else:
                                             if getattr(rel, 'null', False):
                                                 print(f"DEBUG: Nullifying {table}.{fk_field} because {fk_value} is missing")
                                                 cleaned_data[fk_field] = None
@@ -369,6 +391,9 @@ class PushEndpoint(APIView):
                                 
                                 print(f"SAVED {table} {obj_id}: Created={created}")
                                 synced_ids[table].append(obj_id)
+                                # Universal mapping update
+                                if obj.id != obj_id:
+                                    id_mapping[obj_id] = obj.id
                         except Exception as row_error:
                             import traceback
                             print(f"CRITICAL ERROR syncing {table} row {obj_id}: {str(row_error)}")
