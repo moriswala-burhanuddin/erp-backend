@@ -94,7 +94,10 @@ def db_diagnostic(request):
     # Check migrations
     from django.db.migrations.recorder import MigrationRecorder
     applied_migrations = MigrationRecorder.Migration.objects.filter(app='api').values_list('name', flat=True)
-    diagnostic["migrations"] = list(applied_migrations)
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    diagnostic["superuser_exists"] = User.objects.filter(is_superuser=True).exists()
+    diagnostic["bootstrap_header_received"] = request.headers.get('X-Bootstrap-Auth')
             
     return Response(diagnostic)
 from rest_framework import permissions
