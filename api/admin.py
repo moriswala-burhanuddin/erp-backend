@@ -8,7 +8,7 @@ from .models import (
     Receiving, ReceivingItem, SaleReturn, Notification,
     OnlineOrder, OnlineOrderItem, OnlineReturn,
     Client, Device, Feature, ClientFeature,
-    Employee, Attendance, Leave, Payroll, PerformanceReview
+    Employee, Attendance, Leave, Payroll, PerformanceReview, Shift
 )
 
 
@@ -228,3 +228,8 @@ class PayrollAdmin(admin.ModelAdmin):
 class PerformanceReviewAdmin(admin.ModelAdmin):
     list_display = ('employee', 'reviewer', 'date', 'rating')
     list_filter = ('rating', 'date')
+
+@admin.register(Shift)
+class ShiftAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'type', 'start_time', 'end_time', 'status')
+    list_filter = ('status', 'type')

@@ -10,7 +10,7 @@ from .models import (
     Store, Account, Product, Customer, Sale, Purchase, StockLog, User, 
     Quotation, Transaction, ExpenseCategory, TaxSlab, StockTransfer, 
     PurchaseOrder, LoyaltyPoint, Commission,
-    Employee, Attendance, Leave, Payroll, PerformanceReview,
+    Employee, Attendance, Leave, Payroll, PerformanceReview, Shift,
     Supplier, SupplierCustomField, SupplierCustomFieldValue, SupplierTransaction,
     PaymentTerm, SupplierDocument,
     Receiving, ReceivingItem,
@@ -188,6 +188,7 @@ class PushEndpoint(APIView):
             'employees',
             'payroll',
             'performance_reviews',
+            'shifts',
             'product_images',
             'key_features',
         ]
@@ -405,6 +406,7 @@ class PushEndpoint(APIView):
             'employees': Employee,
             'payroll': Payroll,
             'performance_reviews': PerformanceReview,
+            'shifts': Shift,
             'cheques': Cheque,
             'categories': Category,
         }
@@ -459,6 +461,7 @@ class PullEndpoint(APIView):
                 'employees',
                 'payroll',
                 'performance_reviews',
+                'shifts',
             ]
 
             updates = {}

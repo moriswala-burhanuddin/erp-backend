@@ -532,6 +532,7 @@ def generate_att_id(): return generate_id('att')
 def generate_leave_id(): return generate_id('leave')
 def generate_payroll_id(): return generate_id('pay')
 def generate_perf_id(): return generate_id('perf')
+def generate_shift_id(): return generate_id('shift')
 
 class Employee(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_emp_id)
@@ -601,6 +602,18 @@ class PerformanceReview(models.Model):
     device_id = models.CharField(max_length=50, null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
+
+class Shift(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_shift_id)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='shifts')
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    type = models.CharField(max_length=50, choices=[('morning', 'Morning'), ('evening', 'Evening'), ('full', 'Full Day')])
+    status = models.CharField(max_length=50, choices=[('assigned', 'Assigned'), ('completed', 'Completed'), ('cancelled', 'Cancelled')], default='assigned')
+    is_deleted = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    sync_status = models.IntegerField(default=0)
 
 
 # ─────────────────────────────────────────────────────────────
