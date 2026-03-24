@@ -543,6 +543,8 @@ class Employee(models.Model):
     documents = models.TextField(null=True, blank=True) # JSON list of document URLs
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='employees')
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 class Attendance(models.Model):
@@ -555,6 +557,7 @@ class Attendance(models.Model):
     total_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 class Leave(models.Model):
@@ -567,6 +570,7 @@ class Leave(models.Model):
     status = models.CharField(max_length=50, choices=[('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected')], default='pending')
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 class Payroll(models.Model):
@@ -579,7 +583,9 @@ class Payroll(models.Model):
     net_salary = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=50, choices=[('generated', 'Generated'), ('paid', 'Paid')], default='generated')
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    year = models.IntegerField(default=2026)
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 class PerformanceReview(models.Model):
@@ -589,8 +595,11 @@ class PerformanceReview(models.Model):
     kpi_score = models.DecimalField(max_digits=5, decimal_places=2) # 0-100
     rating = models.IntegerField() # 1-5
     comments = models.TextField(null=True, blank=True)
+    reviewer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='given_reviews')
+    date = models.DateField(auto_now_add=True, null=True, blank=True)
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     device_id = models.CharField(max_length=50, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 
