@@ -183,9 +183,9 @@ class PushEndpoint(APIView):
             'invoices',
             'invoice_items',
             'cheques',
+            'employees',
             'attendance',
             'leaves',
-            'employees',
             'payroll',
             'performance_reviews',
             'shifts',
@@ -247,20 +247,23 @@ class PushEndpoint(APIView):
                                 if 'email' in row_data and not row_data.get('username'):
                                     row_data['username'] = row_data['email']
 
-                                # Normalize roles: default to staff if invalid
-                                valid_roles = [c[0] for c in model._meta.get_field('role').choices]
-                                if row_data.get('role') not in valid_roles:
-                                    row_data['role'] = 'staff'
-
-                                if 'is_active' not in row_data:
-                                    row_data['is_active'] = True
-                            
-                                row_data['is_verified'] = True
-
-                                incoming_role = (row_data.get('role') or 'user').lower()
-                                if incoming_role in ['admin', 'super_admin']:
-                                    row_data['is_staff'] = True
-                                    row_data['is_superuser'] = True
+                                # Normalize roles: only for users
+                                if table == 'users':
+                                    valid_roles = [c[0] for c in model._meta.get_field('role').choices]
+                                    if row_data.get('role') not in valid_roles:
+                                        row_data['role'] = 'staff'
+                                    
+                                    if 'is_active' not in row_data:
+                                        row_data['is_active'] = True
+                                    
+                                    row_data['is_verified'] = True
+                                    
+                                    incoming_role = (row_data.get('role') or 'user').lower()
+                                    if incoming_role in ['admin', 'super_admin']:
+                                        row_data['is_staff'] = True
+                                        row_data['is_superuser'] = True
+                                elif table == 'employees':
+                                    row_data['is_verified'] = True
 
                                 if 'name' in row_data:
                                     name_parts = row_data['name'].split(' ', 1)
@@ -336,11 +339,19 @@ class PushEndpoint(APIView):
                                             if key == 'password' and is_placeholder:
                                                 continue
                                             setattr(existing_user, key, value)
+                                        
+                                        # Critical: ensure the ID matches if we found it by email
+                                        if existing_user.id != obj_id:
+                                            print(f"[SYNC] Collapsing user ID {obj_id} into existing {existing_user.id} ({email})")
+                                            # We don't change the ID of the existing user or it breaks other FKs on server
+                                            # Instead, we just mark the incoming ID as synced so the client stops pushing it
+                                            pass 
+                                        
                                         existing_user.save()
                                         obj, created = existing_user, False
                                     else:
                                         cleaned_data['sync_status'] = 1
-                                    obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                                        obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 else:
                                     cleaned_data['sync_status'] = 1
                                     obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
