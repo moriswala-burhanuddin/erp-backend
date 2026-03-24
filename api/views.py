@@ -338,8 +338,10 @@ class PushEndpoint(APIView):
                                         existing_user.save()
                                         obj, created = existing_user, False
                                     else:
-                                        obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                                        cleaned_data['sync_status'] = 1
+                                    obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 else:
+                                    cleaned_data['sync_status'] = 1
                                     obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 
                                 print(f"SAVED {table} {obj_id}: Created={created}")
