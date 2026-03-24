@@ -335,6 +335,9 @@ class PushEndpoint(APIView):
                                                 # If it's required, we must skip this record or it will crash the DB
                                                 raise IntegrityError(f"Required relationship {fk_value} missing for {table}.{fk_field}")
 
+                                if 'sync_status' in valid_fields:
+                                    cleaned_data['sync_status'] = 1
+                                
                                 if table == 'users' and 'email' in cleaned_data:
                                     email = cleaned_data.get('email')
                                     existing_user = User.objects.filter(email=email).first()
@@ -360,10 +363,8 @@ class PushEndpoint(APIView):
                                         existing_user.save()
                                         obj, created = existing_user, False
                                     else:
-                                        cleaned_data['sync_status'] = 1
                                         obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 else:
-                                    cleaned_data['sync_status'] = 1
                                     obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 
                                 print(f"SAVED {table} {obj_id}: Created={created}")
