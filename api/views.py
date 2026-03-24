@@ -195,6 +195,7 @@ class PushEndpoint(APIView):
 
 
         synced_ids = {table: [] for table in ORDER}
+        id_mapping = {}  # Map incoming ID -> existing server ID for collisions
 
         try:
             with transaction.atomic():
@@ -306,13 +307,21 @@ class PushEndpoint(APIView):
                                 
                                 obj_id = cleaned_data.pop('id')
                                 
-                                # PROACTIVE FK VALIDATION
+                                # PROACTIVE FK VALIDATION & MAPPING
                                 from django.db import IntegrityError
                                 relationships = [f for f in model._meta.get_fields() if f.is_relation and f.concrete]
                                 for rel in relationships:
                                     fk_field = getattr(rel, 'attname', None)
                                     if not fk_field: continue
                                     fk_value = cleaned_data.get(fk_field)
+                                    
+                                    # Translate FK using id_mapping if needed
+                                    if fk_value in id_mapping:
+                                        new_fk = id_mapping[fk_value]
+                                        print(f"DEBUG: Translating {table}.{fk_field} from {fk_value} to {new_fk}")
+                                        cleaned_data[fk_field] = new_fk
+                                        fk_value = new_fk
+
                                     if fk_value:
                                         target_model = rel.related_model
                                         if not target_model.objects.filter(id=fk_value).exists():
@@ -343,9 +352,7 @@ class PushEndpoint(APIView):
                                         # Critical: ensure the ID matches if we found it by email
                                         if existing_user.id != obj_id:
                                             print(f"[SYNC] Collapsing user ID {obj_id} into existing {existing_user.id} ({email})")
-                                            # We don't change the ID of the existing user or it breaks other FKs on server
-                                            # Instead, we just mark the incoming ID as synced so the client stops pushing it
-                                            pass 
+                                            id_mapping[obj_id] = existing_user.id
                                         
                                         existing_user.save()
                                         obj, created = existing_user, False
