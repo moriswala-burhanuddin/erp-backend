@@ -100,6 +100,7 @@ def db_diagnostic(request):
     User = get_user_model()
     diagnostic["superuser_exists"] = User.objects.filter(is_superuser=True).exists()
     diagnostic["bootstrap_header_received"] = request.headers.get('X-Bootstrap-Auth')
+    diagnostic["bootstrap_param_received"] = request.GET.get('bootstrap')
     
     from django.conf import settings
     diagnostic["allow_bootstrap_sync"] = getattr(settings, 'ALLOW_BOOTSTRAP_SYNC', False)
@@ -120,20 +121,23 @@ class AllowBootstrapSync(permissions.BasePermission):
             return True
         
         # 2. Bootstrap check
+        # Check both header and query param for reliability
         bootstrap_header = request.headers.get('X-Bootstrap-Auth')
-        if bootstrap_header == 'super-admin-init':
+        bootstrap_param = request.GET.get('bootstrap')
+        
+        if bootstrap_header == 'super-admin-init' or bootstrap_param == 'true':
             from django.conf import settings
             if getattr(settings, 'ALLOW_BOOTSTRAP_SYNC', False):
-                print("[AUTH] BOOTSTRAP SYNC ALLOWED: ALLOW_BOOTSTRAP_SYNC is True.")
+                print(f"[AUTH] BOOTSTRAP SYNC ALLOWED (Header: {bootstrap_header}, Param: {bootstrap_param})")
                 return True
 
             from django.contrib.auth import get_user_model
             User = get_user_model()
             if not User.objects.filter(is_superuser=True).exists():
-                print("[AUTH] BOOTSTRAP SYNC ALLOWED: No superusers found in DB.")
+                print(f"[AUTH] BOOTSTRAP SYNC ALLOWED (No superusers): Header: {bootstrap_header}, Param: {bootstrap_param}")
                 return True
             else:
-                print("[AUTH] BOOTSTRAP SYNC DENIED: Superusers already exist in DB.")
+                print(f"[AUTH] BOOTSTRAP SYNC DENIED: Superusers exist and ALLOW_BOOTSTRAP_SYNC is False.")
         
         return False
 
