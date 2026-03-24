@@ -193,6 +193,7 @@ class PushEndpoint(APIView):
                         continue
 
                     for row in rows:
+                        obj_id = row.get('id', 'unknown')
                         try:
                             # Use nested transaction to allow skipping single row failures
                             with transaction.atomic():

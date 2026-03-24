@@ -34,6 +34,7 @@ CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=True, cast=boo
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'x-cart-session',
+    'x-bootstrap-auth',
 ]
 
 
