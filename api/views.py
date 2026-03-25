@@ -374,40 +374,59 @@ class PushEndpoint(APIView):
                                         target_model = rel.related_model
                                         potential_match = None
                                         
-                                        # Special case for Users: match by email or username
-                                        if table == 'employees' and fk_field == 'user_id':
-                                            potential_match = User.objects.filter(Q(id=fk_value) | Q(username=fk_value) | Q(email=fk_value)).first()
+                                        # Special case for Users: match by email or username first
+                                        if target_model == User:
+                                            potential_match = User.objects.filter(
+                                                Q(id=fk_value) | Q(username=fk_value) | Q(email=fk_value)
+                                            ).first()
                                         
+                                        # Search by common name fields
                                         if not potential_match:
-                                            # THE HAMMER: Create placeholder user if missing
-                                            if table == 'employees' and fk_field == 'user_id':
-                                                print(f"[SYNC] !! EMERGENCY !! Creating placeholder User for missing dependency: {fk_value}")
-                                                try:
-                                                    potential_match = User.objects.create(
-                                                        id=fk_value, 
-                                                        username=f"sync_placeholder_{fk_value}", 
-                                                        email=f"placeholder_{fk_value}@ghizer.com",
-                                                        is_active=False
-                                                    )
-                                                except Exception as p_err:
-                                                    print(f"[SYNC] Placeholder creation failed: {str(p_err)}")
-                                        
-                                        if not potential_match:
-                                            search_fields = ['name', 'company_name', 'full_name', 'username', 'email']
-                                            for search_field in search_fields:
+                                            for search_field in ['name', 'company_name', 'full_name', 'username', 'email']:
                                                 try:
                                                     if search_field in [f.name for f in target_model._meta.get_fields()]:
                                                         potential_match = target_model.objects.filter(**{search_field: fk_value}).first()
-                                                        if potential_match: 
+                                                        if potential_match:
                                                             break
                                                 except: continue
                                         
+                                        # GENERAL HAMMER: Create a minimal placeholder for any missing required FK
+                                        if not potential_match:
+                                            print(f"[SYNC] Creating placeholder {target_model.__name__} id={fk_value}")
+                                            try:
+                                                placeholder_data = {target_model._meta.pk.name: fk_value}
+                                                # Fill required string fields with placeholder text
+                                                for f in target_model._meta.get_fields():
+                                                    if not hasattr(f, 'column'): continue
+                                                    if f.primary_key: continue
+                                                    if not getattr(f, 'blank', True) and not getattr(f, 'null', True):
+                                                        if f.get_internal_type() in ['CharField', 'TextField']:
+                                                            placeholder_data[f.name] = f"placeholder"
+                                                        elif f.get_internal_type() == 'BooleanField':
+                                                            placeholder_data[f.name] = False
+                                                        elif f.get_internal_type() in ['IntegerField', 'FloatField', 'DecimalField']:
+                                                            placeholder_data[f.name] = 0
+                                                # Special extra fields for User
+                                                if target_model == User:
+                                                    placeholder_data.update({
+                                                        'username': f"placeholder_{fk_value}",
+                                                        'email': f"placeholder_{fk_value}@ghizer.local",
+                                                        'is_active': False,
+                                                    })
+                                                potential_match, _ = target_model.objects.get_or_create(
+                                                    **{target_model._meta.pk.name: fk_value},
+                                                    defaults=placeholder_data
+                                                )
+                                            except Exception as p_err:
+                                                print(f"[SYNC] Placeholder creation failed for {target_model.__name__}: {p_err}")
+                                        
                                         if potential_match:
-                                            print(f"[SYNC] Resolved FK {fk_field} '{fk_value}' to {potential_match.id}")
+                                            print(f"[SYNC] Resolved FK {fk_field}='{fk_value}' to {potential_match.id}")
                                             id_mapping[fk_value] = potential_match.id
                                             fk_value = potential_match.id
                                             cleaned_data[fk_field] = fk_value
                                         else:
+                                            # Truly unresolvable — null it if allowed, else skip row
                                             if getattr(rel, 'null', False):
                                                 cleaned_data[fk_field] = None
                                             else:
