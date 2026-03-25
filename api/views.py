@@ -197,6 +197,10 @@ class PushEndpoint(APIView):
             'online_returns', # Added
             'sale_returns', # Added
             'notifications', # Added
+            'gift_cards', # Added
+            'work_orders', # Added
+            'deliveries', # Added
+            'delivery_zones', # Added
         ]
 
 
@@ -313,7 +317,15 @@ class PushEndpoint(APIView):
                                             from django.utils.dateparse import parse_datetime, parse_date, parse_time
                                             
                                             if internal_type == 'DateTimeField':
+                                                # Try common formats if parse_datetime fails
                                                 parsed_v = parse_datetime(v_str)
+                                                if not parsed_v:
+                                                    # Fallback for "YYYY-MM-DD HH:MM:SS..."
+                                                    try:
+                                                        from datetime import datetime
+                                                        parsed_v = datetime.strptime(v_str.split('.')[0], "%Y-%m-%d %H:%M:%S")
+                                                    except: pass
+                                                
                                                 if parsed_v:
                                                     if timezone.is_naive(parsed_v):
                                                         v = timezone.make_aware(parsed_v)
@@ -325,7 +337,7 @@ class PushEndpoint(APIView):
                                                 time_part = v_str.split('T')[1] if 'T' in v_str else v_str.split(' ')[1] if ' ' in v_str else v_str
                                                 v = parse_time(time_part.split('.')[0]) or v
                                         except Exception as dt_err:
-                                            pass # Fallback to original v
+                                            pass 
                                     
                                     cleaned_data[effective_key] = v
                                 
@@ -447,6 +459,58 @@ class PushEndpoint(APIView):
                             import traceback
                             print(f"CRITICAL ERROR syncing {table} row {obj_id}: {str(row_error)}")
                             traceback.print_exc()
+                            continue
+                
+                # CATCH-ALL Loop for tables not in the fixed ORDER list
+                for table, rows in payload.items():
+                    if table in ORDER or table in ['deviceId', 'sync_version']: 
+                        continue
+                    
+                    if table not in synced_ids:
+                        synced_ids[table] = []
+                        
+                    model = self.get_model(table)
+                    if not model: continue
+                    
+                    print(f"DEBUG: Processing Catch-All table {table} ({len(rows)} rows)")
+                    for row in rows:
+                        obj_id = row.get('id', 'unknown')
+                        try:
+                            with transaction.atomic():
+                                row_data = {}
+                                for k, v in row.items():
+                                    if k == 'sync_status': continue
+                                    snake_key = ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_')
+                                    row_data[snake_key] = v
+                                    
+                                valid_fields = {f.name for f in model._meta.get_fields() if not (f.is_relation and not f.concrete)}
+                                valid_fields.update({getattr(f, 'attname', None) for f in model._meta.get_fields()})
+                                
+                                cleaned_data = {}
+                                for k, v in row_data.items():
+                                    if k not in valid_fields: continue
+                                    field_obj = next((f for f in model._meta.get_fields() if f.name == k or getattr(f, 'attname', None) == k), None)
+                                    effective_key = getattr(field_obj, 'attname', k) if field_obj and field_obj.is_relation else k
+                                    
+                                    # Basic normalization
+                                    if v == "" or v is None:
+                                        cleaned_data[effective_key] = None if getattr(field_obj, 'null', False) else v
+                                    else:
+                                        # Simple Aware transition
+                                        if field_obj and field_obj.get_internal_type() == 'DateTimeField' and isinstance(v, str):
+                                            try:
+                                                from django.utils.dateparse import parse_datetime
+                                                pv = parse_datetime(v.strip())
+                                                if pv and timezone.is_naive(pv):
+                                                    v = timezone.make_aware(pv)
+                                            except: pass
+                                        cleaned_data[effective_key] = v
+                                
+                                target_id = cleaned_data.pop('id', obj_id)
+                                obj, created = model.objects.update_or_create(id=target_id, defaults=cleaned_data)
+                                synced_ids[table].append(obj_id)
+                        except Exception as row_err:
+                            print(f"Catch-all ERROR {table} {obj_id}: {str(row_err)}")
                             continue
 
             return Response({
