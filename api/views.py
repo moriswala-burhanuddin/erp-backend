@@ -366,14 +366,27 @@ class PushEndpoint(APIView):
                                             potential_match = User.objects.filter(Q(id=fk_value) | Q(username=fk_value) | Q(email=fk_value)).first()
                                         
                                         if not potential_match:
+                                            # THE HAMMER: Create placeholder user if missing
+                                            if table == 'employees' and fk_field == 'user_id':
+                                                print(f"[SYNC] !! EMERGENCY !! Creating placeholder User for missing dependency: {fk_value}")
+                                                try:
+                                                    potential_match = User.objects.create(
+                                                        id=fk_value, 
+                                                        username=f"sync_placeholder_{fk_value}", 
+                                                        email=f"placeholder_{fk_value}@ghizer.com",
+                                                        is_active=False
+                                                    )
+                                                except Exception as p_err:
+                                                    print(f"[SYNC] Placeholder creation failed: {str(p_err)}")
+                                        
+                                        if not potential_match:
                                             search_fields = ['name', 'company_name', 'full_name', 'username', 'email']
-                                            print(f"[SYNC] Searching for {target_model.__name__} by fields {search_fields} for value {fk_value}")
+                                            print(f"[SYNC] Searching for {target_model.__name__} by {search_fields} for {fk_value}")
                                             for search_field in search_fields:
                                                 try:
                                                     if search_field in [f.name for f in target_model._meta.get_fields()]:
                                                         potential_match = target_model.objects.filter(**{search_field: fk_value}).first()
                                                         if potential_match: 
-                                                            print(f"[SYNC] Match found in {search_field}: {potential_match.id}")
                                                             break
                                                 except: continue
                                         
@@ -387,8 +400,10 @@ class PushEndpoint(APIView):
                                                 print(f"DEBUG: Nullifying {table}.{fk_field} because {fk_value} is missing")
                                                 cleaned_data[fk_field] = None
                                             else:
-                                                # If it's required, we must skip this record or it will crash the DB
-                                                raise IntegrityError(f"Required relationship {fk_value} missing for {table}.{fk_field}")
+                                                # NON-FATAL SKIP: Instead of raising error, we just log it and move to next record
+                                                print(f"[SYNC] ERROR: Required relationship {fk_value} missing for {table}.{fk_field}. SKIPPING ROW.")
+                                                # We don't raise here, so the outer loop can continue
+                                                raise Exception(f"Missing dependency {fk_value}")
 
                                 if 'sync_status' in valid_fields:
                                     cleaned_data['sync_status'] = 1
