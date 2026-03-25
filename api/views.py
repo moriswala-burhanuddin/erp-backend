@@ -163,7 +163,7 @@ def make_aware_if_naive(value):
     except:
         return value
 
-class SyncPushView(APIView):
+class PushEndpoint(APIView):
     permission_classes = [AllowBootstrapSync | permissions.IsAuthenticated]
 
     def post(self, request):
