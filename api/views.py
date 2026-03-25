@@ -170,6 +170,7 @@ class PushEndpoint(APIView):
             'quotations',
             'sales', 
             'purchases', 
+            'sale_payments',  # Added
             'supplier_transactions',
             'supplier_documents',
             'purchase_orders',
@@ -191,6 +192,11 @@ class PushEndpoint(APIView):
             'shifts',
             'product_images',
             'key_features',
+            'online_orders', # Added
+            'online_order_items', # Added
+            'online_returns', # Added
+            'sale_returns', # Added
+            'notifications', # Added
         ]
 
 
@@ -308,6 +314,17 @@ class PushEndpoint(APIView):
                                         elif internal_type == 'DateField' and 'T' in str(v):
                                             cleaned_data[effective_key] = str(v).split('T')[0]
                                         else:
+                                            # Handle Naive Datetime warnings for fields ending in _at or _date
+                                            if internal_type in ['DateTimeField', 'DateField'] and v:
+                                                try:
+                                                    from django.utils.dateparse import parse_datetime, parse_date
+                                                    if internal_type == 'DateTimeField':
+                                                        parsed_v = parse_datetime(str(v))
+                                                        if parsed_v and timezone.is_naive(parsed_v):
+                                                            v = timezone.make_aware(parsed_v)
+                                                    else:
+                                                        v = parse_date(str(v)) or v
+                                                except: pass
                                             cleaned_data[effective_key] = v
                                 
                                 if table == 'users':
@@ -336,13 +353,21 @@ class PushEndpoint(APIView):
                                         target_model = rel.related_model
                                         # Recovery: Search by name/company_name
                                         potential_match = None
-                                        search_fields = ['name', 'company_name', 'full_name', 'username']
-                                        for search_field in search_fields:
-                                            try:
-                                                if search_field in [f.name for f in target_model._meta.get_fields()]:
-                                                    potential_match = target_model.objects.filter(**{search_field: fk_value}).first()
-                                                    if potential_match: break
-                                            except: continue
+                                        
+                                        # Special case for Users: match by email or username
+                                        if table == 'employees' and fk_field == 'user_id':
+                                            # If we don't have the user object here, we can't search by email/username easily 
+                                            # unless the client provides it. But we can check if any user has this ID as their 'username'
+                                            potential_match = User.objects.filter(Q(id=fk_value) | Q(username=fk_value) | Q(email=fk_value)).first()
+                                        
+                                        if not potential_match:
+                                            search_fields = ['name', 'company_name', 'full_name', 'username', 'email']
+                                            for search_field in search_fields:
+                                                try:
+                                                    if search_field in [f.name for f in target_model._meta.get_fields()]:
+                                                        potential_match = target_model.objects.filter(**{search_field: fk_value}).first()
+                                                        if potential_match: break
+                                                except: continue
                                         
                                         if potential_match:
                                             print(f"[SYNC] Resolved FK {fk_field} '{fk_value}' to existing record {potential_match.id}")
