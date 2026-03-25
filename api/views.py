@@ -141,7 +141,29 @@ class AllowBootstrapSync(permissions.BasePermission):
         
         return False
 
-class PushEndpoint(APIView):
+def make_aware_if_naive(value):
+    if not value or not isinstance(value, str):
+        return value
+    try:
+        from django.utils.dateparse import parse_datetime
+        from django.utils import timezone
+        from datetime import datetime
+        
+        # Try parse_datetime (ISO)
+        dt = parse_datetime(value.strip())
+        if not dt:
+            # Try space-separated format
+            try:
+                dt = datetime.strptime(value.strip().split('.')[0], "%Y-%m-%d %H:%M:%S")
+            except: pass
+            
+        if dt and timezone.is_naive(dt):
+            return timezone.make_aware(dt)
+        return dt or value
+    except:
+        return value
+
+class SyncPushView(APIView):
     permission_classes = [AllowBootstrapSync | permissions.IsAuthenticated]
 
     def post(self, request):
@@ -294,6 +316,10 @@ class PushEndpoint(APIView):
                                     
                                     field_obj = next((f for f in model._meta.get_fields() if f.name == k or getattr(f, 'attname', None) == k), None)
                                     
+                                    # SKIP auto_now / auto_now_add — Django manages these, passing values causes RuntimeWarning
+                                    if field_obj and (getattr(field_obj, 'auto_now', False) or getattr(field_obj, 'auto_now_add', False)):
+                                        continue
+                                    
                                     # If it's a relationship, use the attname (e.g. category_id) for assignment
                                     effective_key = k
                                     if field_obj and field_obj.is_relation and field_obj.concrete:
@@ -309,35 +335,13 @@ class PushEndpoint(APIView):
                                             cleaned_data[effective_key] = ""
                                         else:
                                             cleaned_data[effective_key] = v
-                                    # Handle Naive Datetime warnings & normalization
-                                    if v and internal_type in ['DateTimeField', 'DateField', 'TimeField']:
-                                        try:
-                                            # Clean string input
-                                            v_str = str(v).strip()
-                                            from django.utils.dateparse import parse_datetime, parse_date, parse_time
-                                            
-                                            if internal_type == 'DateTimeField':
-                                                # Try common formats if parse_datetime fails
-                                                parsed_v = parse_datetime(v_str)
-                                                if not parsed_v:
-                                                    # Fallback for "YYYY-MM-DD HH:MM:SS..."
-                                                    try:
-                                                        from datetime import datetime
-                                                        parsed_v = datetime.strptime(v_str.split('.')[0], "%Y-%m-%d %H:%M:%S")
-                                                    except: pass
-                                                
-                                                if parsed_v:
-                                                    if timezone.is_naive(parsed_v):
-                                                        v = timezone.make_aware(parsed_v)
-                                                    else:
-                                                        v = parsed_v
-                                            elif internal_type == 'DateField':
-                                                v = parse_date(v_str.split('T')[0].split(' ')[0]) or v
-                                            elif internal_type == 'TimeField':
-                                                time_part = v_str.split('T')[1] if 'T' in v_str else v_str.split(' ')[1] if ' ' in v_str else v_str
-                                                v = parse_time(time_part.split('.')[0]) or v
-                                        except Exception as dt_err:
-                                            pass 
+                                    # Hardened Datetime Handling
+                                    if internal_type in ['DateTimeField', 'DateField', 'TimeField']:
+                                        v = make_aware_if_naive(v)
+                                        if internal_type == 'DateField' and isinstance(v, datetime):
+                                            v = v.date()
+                                        elif internal_type == 'TimeField' and isinstance(v, datetime):
+                                            v = v.time()
                                     
                                     cleaned_data[effective_key] = v
                                 
@@ -365,17 +369,13 @@ class PushEndpoint(APIView):
                                         fk_value = id_mapping[fk_value]
                                         cleaned_data[fk_field] = fk_value
 
-                                    # Validation: If it's a required field, check if it exists on server
-                                    # Relaxed check: also try to find by Name if it's a string name
+                                    # Validation: check if FK exists on server
                                     if fk_value and not rel.related_model.objects.filter(id=fk_value).exists():
                                         target_model = rel.related_model
-                                        # Recovery: Search by name/company_name
                                         potential_match = None
                                         
                                         # Special case for Users: match by email or username
                                         if table == 'employees' and fk_field == 'user_id':
-                                            # If we don't have the user object here, we can't search by email/username easily 
-                                            # unless the client provides it. But we can check if any user has this ID as their 'username'
                                             potential_match = User.objects.filter(Q(id=fk_value) | Q(username=fk_value) | Q(email=fk_value)).first()
                                         
                                         if not potential_match:
@@ -394,7 +394,6 @@ class PushEndpoint(APIView):
                                         
                                         if not potential_match:
                                             search_fields = ['name', 'company_name', 'full_name', 'username', 'email']
-                                            print(f"[SYNC] Searching for {target_model.__name__} by {search_fields} for {fk_value}")
                                             for search_field in search_fields:
                                                 try:
                                                     if search_field in [f.name for f in target_model._meta.get_fields()]:
@@ -404,19 +403,17 @@ class PushEndpoint(APIView):
                                                 except: continue
                                         
                                         if potential_match:
-                                            print(f"[SYNC] Resolved FK {fk_field} '{fk_value}' to existing record {potential_match.id}")
-                                            id_mapping[fk_value] = potential_match.id # Cache the name-to-ID mapping
+                                            print(f"[SYNC] Resolved FK {fk_field} '{fk_value}' to {potential_match.id}")
+                                            id_mapping[fk_value] = potential_match.id
                                             fk_value = potential_match.id
                                             cleaned_data[fk_field] = fk_value
                                         else:
                                             if getattr(rel, 'null', False):
-                                                print(f"DEBUG: Nullifying {table}.{fk_field} because {fk_value} is missing")
                                                 cleaned_data[fk_field] = None
                                             else:
-                                                # NON-FATAL SKIP: Instead of raising error, we just log it and move to next record
-                                                print(f"[SYNC] ERROR: Required relationship {fk_value} missing for {table}.{fk_field}. SKIPPING ROW.")
-                                                # We don't raise here, so the outer loop can continue
-                                                raise Exception(f"Missing dependency {fk_value}")
+                                                error_msg = f"Missing dependency {fk_value} for {table}.{fk_field}"
+                                                print(f"[SYNC] SKIP ROW: {error_msg}")
+                                                raise Exception(error_msg)
 
                                 if 'sync_status' in valid_fields:
                                     cleaned_data['sync_status'] = 1
