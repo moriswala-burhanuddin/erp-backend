@@ -305,27 +305,28 @@ class PushEndpoint(APIView):
                                             cleaned_data[effective_key] = ""
                                         else:
                                             cleaned_data[effective_key] = v
-                                    else:
-                                        if internal_type == 'TimeField' and 'T' in str(v):
-                                            try:
-                                                cleaned_data[effective_key] = str(v).split('T')[1].split('.')[0]
-                                            except Exception:
-                                                cleaned_data[effective_key] = v
-                                        elif internal_type == 'DateField' and 'T' in str(v):
-                                            cleaned_data[effective_key] = str(v).split('T')[0]
-                                        else:
-                                            # Handle Naive Datetime warnings for fields ending in _at or _date
-                                            if internal_type in ['DateTimeField', 'DateField'] and v:
-                                                try:
-                                                    from django.utils.dateparse import parse_datetime, parse_date
-                                                    if internal_type == 'DateTimeField':
-                                                        parsed_v = parse_datetime(str(v))
-                                                        if parsed_v and timezone.is_naive(parsed_v):
-                                                            v = timezone.make_aware(parsed_v)
-                                                    else:
-                                                        v = parse_date(str(v)) or v
-                                                except: pass
-                                            cleaned_data[effective_key] = v
+                                    # Handle Naive Datetime warnings & normalization
+                                    if v and internal_type in ['DateTimeField', 'DateField', 'TimeField']:
+                                        try:
+                                            # Clean string input
+                                            v_str = str(v).strip()
+                                            if 'T' in v_str:
+                                                from django.utils.dateparse import parse_datetime, parse_date, parse_time
+                                                if internal_type == 'DateTimeField':
+                                                    parsed_v = parse_datetime(v_str)
+                                                    if parsed_v and timezone.is_naive(parsed_v):
+                                                        v = timezone.make_aware(parsed_v)
+                                                        print(f"DEBUG: Made {k} aware: {v}")
+                                                    elif parsed_v:
+                                                        v = parsed_v
+                                                elif internal_type == 'DateField':
+                                                    v = parse_date(v_str.split('T')[0])
+                                                elif internal_type == 'TimeField':
+                                                    v = parse_time(v_str.split('T')[1].split('.')[0])
+                                        except Exception as dt_err:
+                                            print(f"DEBUG: DateTime parsing error for {k} ({v}): {str(dt_err)}")
+                                    
+                                    cleaned_data[effective_key] = v
                                 
                                 if table == 'users':
                                     if cleaned_data.get('first_name') is None: cleaned_data['first_name'] = ""
@@ -340,7 +341,11 @@ class PushEndpoint(APIView):
                                     fk_field = getattr(rel, 'attname', None)
                                     if not fk_field: continue
                                     fk_value = cleaned_data.get(fk_field)
+                                    if isinstance(fk_value, str):
+                                        fk_value = fk_value.strip()
+                                        cleaned_data[fk_field] = fk_value
                                     
+                                    print(f"DEBUG: Checking FK {table}.{fk_field} = {fk_value}")
                                     # Try to resolve ID via mapping first
                                     if fk_value in id_mapping:
                                         print(f"[SYNC] Translating FK {fk_field}: {fk_value} -> {id_mapping[fk_value]}")
@@ -362,11 +367,14 @@ class PushEndpoint(APIView):
                                         
                                         if not potential_match:
                                             search_fields = ['name', 'company_name', 'full_name', 'username', 'email']
+                                            print(f"[SYNC] Searching for {target_model.__name__} by fields {search_fields} for value {fk_value}")
                                             for search_field in search_fields:
                                                 try:
                                                     if search_field in [f.name for f in target_model._meta.get_fields()]:
                                                         potential_match = target_model.objects.filter(**{search_field: fk_value}).first()
-                                                        if potential_match: break
+                                                        if potential_match: 
+                                                            print(f"[SYNC] Match found in {search_field}: {potential_match.id}")
+                                                            break
                                                 except: continue
                                         
                                         if potential_match:
