@@ -310,21 +310,22 @@ class PushEndpoint(APIView):
                                         try:
                                             # Clean string input
                                             v_str = str(v).strip()
-                                            if 'T' in v_str:
-                                                from django.utils.dateparse import parse_datetime, parse_date, parse_time
-                                                if internal_type == 'DateTimeField':
-                                                    parsed_v = parse_datetime(v_str)
-                                                    if parsed_v and timezone.is_naive(parsed_v):
+                                            from django.utils.dateparse import parse_datetime, parse_date, parse_time
+                                            
+                                            if internal_type == 'DateTimeField':
+                                                parsed_v = parse_datetime(v_str)
+                                                if parsed_v:
+                                                    if timezone.is_naive(parsed_v):
                                                         v = timezone.make_aware(parsed_v)
-                                                        print(f"DEBUG: Made {k} aware: {v}")
-                                                    elif parsed_v:
+                                                    else:
                                                         v = parsed_v
-                                                elif internal_type == 'DateField':
-                                                    v = parse_date(v_str.split('T')[0])
-                                                elif internal_type == 'TimeField':
-                                                    v = parse_time(v_str.split('T')[1].split('.')[0])
+                                            elif internal_type == 'DateField':
+                                                v = parse_date(v_str.split('T')[0].split(' ')[0]) or v
+                                            elif internal_type == 'TimeField':
+                                                time_part = v_str.split('T')[1] if 'T' in v_str else v_str.split(' ')[1] if ' ' in v_str else v_str
+                                                v = parse_time(time_part.split('.')[0]) or v
                                         except Exception as dt_err:
-                                            print(f"DEBUG: DateTime parsing error for {k} ({v}): {str(dt_err)}")
+                                            pass # Fallback to original v
                                     
                                     cleaned_data[effective_key] = v
                                 
