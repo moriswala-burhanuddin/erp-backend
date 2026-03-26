@@ -5,7 +5,7 @@ from .models import (
     StockLog, Quotation, Transaction, ExpenseCategory, TaxSlab, 
     StockTransfer, PurchaseOrder, LoyaltyPoint, Commission,
     Supplier, PaymentTerm, SupplierDocument,
-    Receiving, ReceivingItem, SaleReturn, Notification,
+    Receiving, ReceivingItem, SaleReturn, Notification, UserPermission,
     OnlineOrder, OnlineOrderItem, OnlineReturn,
     Client, Device, Feature, ClientFeature,
     Employee, Attendance, Leave, Payroll, PerformanceReview, Shift
@@ -233,3 +233,8 @@ class PerformanceReviewAdmin(admin.ModelAdmin):
 class ShiftAdmin(admin.ModelAdmin):
     list_display = ('employee', 'type', 'start_time', 'end_time', 'status')
     list_filter = ('status', 'type')
+
+@admin.register(UserPermission)
+class UserPermissionAdmin(admin.ModelAdmin):
+    list_display = ('user', 'updated_at')
+    search_fields = ('user__email',)

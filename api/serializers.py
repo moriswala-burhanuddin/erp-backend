@@ -139,8 +139,15 @@ from .models import (
     PaymentTerm, SupplierDocument, Invoice, InvoiceItem, Cheque, Category,
     Product, Customer, Sale, Employee, Attendance, Leave, Payroll, 
     PerformanceReview, Receiving, ReceivingItem, ProductImage, KeyFeature,
-    OnlineOrder, OnlineOrderItem, OnlineReturn, Cart, CartItem, Review, Feedback
+    OnlineOrder, OnlineOrderItem, OnlineReturn, Cart, CartItem, Review, Feedback,
+    UserPermission
 )
+
+
+class UserPermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserPermission
+        fields = '__all__'
 
 
 class CategorySerializer(serializers.ModelSerializer):

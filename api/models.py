@@ -55,6 +55,7 @@ def generate_client_id(): return generate_id('client')
 def generate_device_id(): return generate_id('device')
 def generate_feature_id(): return generate_id('ft')
 def generate_clientfeat_id(): return generate_id('cf')
+def generate_perm_id(): return generate_id('perm')
 
 
 
@@ -112,6 +113,15 @@ class User(AbstractUser):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}".strip() or self.username
+
+class UserPermission(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, default=generate_perm_id)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='permissions_profile')
+    permissions = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Permissions for {self.user.email}"
 
 class Account(models.Model):
     id = models.CharField(max_length=50, primary_key=True, default=generate_acc_id)

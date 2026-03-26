@@ -16,8 +16,7 @@ from .models import (
     Receiving, ReceivingItem,
     GiftCard, SalePayment, WorkOrder, Delivery, DeliveryZone,
     Invoice, InvoiceItem, Cheque, Category,
-    OnlineOrder, OnlineOrderItem, OnlineReturn,
-    SaleReturn, Notification
+    OnlineReturn, SaleReturn, Notification, UserPermission
 )
 from django.db.models import Sum, Count, F, Q
 
@@ -587,6 +586,7 @@ class PushEndpoint(APIView):
             'shifts': Shift,
             'cheques': Cheque,
             'categories': Category,
+            'user_permissions': UserPermission,
         }
 
         return model_mapping.get(table_name)
@@ -629,8 +629,9 @@ class PullEndpoint(APIView):
                 'gift_cards',
                 'sale_payments',
                 'work_orders',
-                'deliveries',
-                'delivery_zones',
+                'deliveries', 
+                'delivery_zones', 
+                'user_permissions',
                 'invoices',
                 'invoice_items',
                 'cheques',
@@ -640,6 +641,7 @@ class PullEndpoint(APIView):
                 'payroll',
                 'performance_reviews',
                 'shifts',
+                'user_permissions',
             ]
 
             updates = {}
@@ -682,6 +684,7 @@ class PullEndpoint(APIView):
                 'employees': Employee,
                 'cheques': Cheque,
                 'categories': Category,
+                'user_permissions': UserPermission,
             }
 
 
@@ -696,6 +699,8 @@ class PullEndpoint(APIView):
                      queryset = model.objects.all() # Fetch ALL stores so manager's store appears
                 elif model == User:
                      queryset = model.objects.all() # Fetch ALL users for cross-store staff/admins
+                elif model == UserPermission:
+                     queryset = model.objects.all()
                 elif model == SalePayment:
                      queryset = model.objects.filter(sale__store_id=store_id)
                 elif model == SupplierCustomFieldValue:
