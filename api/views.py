@@ -16,7 +16,8 @@ from .models import (
     Receiving, ReceivingItem,
     GiftCard, SalePayment, WorkOrder, Delivery, DeliveryZone,
     Invoice, InvoiceItem, Cheque, Category,
-    OnlineReturn, SaleReturn, Notification, UserPermission
+    OnlineReturn, SaleReturn, Notification, UserPermission,
+    OnlineOrder, OnlineOrderItem
 )
 from django.db.models import Sum, Count, F, Q
 
@@ -400,7 +401,7 @@ class PushEndpoint(APIView):
                                                     if f.primary_key: continue
                                                     if not getattr(f, 'blank', True) and not getattr(f, 'null', True):
                                                         if f.get_internal_type() in ['CharField', 'TextField']:
-                                                            placeholder_data[f.name] = f"placeholder"
+                                                            placeholder_data[f.name] = f"placeholder_{fk_value}"
                                                         elif f.get_internal_type() == 'BooleanField':
                                                             placeholder_data[f.name] = False
                                                         elif f.get_internal_type() in ['IntegerField', 'FloatField', 'DecimalField']:
@@ -461,9 +462,38 @@ class PushEndpoint(APIView):
                                         existing_user.save()
                                         obj, created = existing_user, False
                                     else:
-                                        obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
-                                else:
-                                    obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                                        if table == 'employees' and 'user_id' in cleaned_data:
+                                            user_id = cleaned_data.get('user_id')
+                                            existing_emp = model.objects.filter(user_id=user_id).first()
+                                            if existing_emp:
+                                                print(f"[SYNC] Employee for user {user_id} already exists (id={existing_emp.id}). Updating instead of creating {obj_id}.")
+                                                for key, value in cleaned_data.items():
+                                                    setattr(existing_emp, key, value)
+                                                existing_emp.save()
+                                                obj, created = existing_emp, False
+                                            else:
+                                                obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                                        elif table == 'payroll' and 'month' in cleaned_data:
+                                            # Fix: Handle "March 2026" or other non-ISO formats
+                                            month_val = cleaned_data.get('month')
+                                            if isinstance(month_val, str) and '-' not in month_val:
+                                                try:
+                                                    from datetime import datetime
+                                                    # Try common formats like "March 2026"
+                                                    try:
+                                                        parsed_date = datetime.strptime(month_val, '%B %Y')
+                                                    except:
+                                                        # Fallback to general parser if available or just skip
+                                                        from dateutil import parser
+                                                        parsed_date = parser.parse(month_val)
+                                                    
+                                                    cleaned_data['month'] = parsed_date.strftime('%Y-%m-%d')
+                                                    print(f"[SYNC] Normalized payroll month: {month_val} -> {cleaned_data['month']}")
+                                                except:
+                                                    print(f"[SYNC] Failed to parse payroll month: {month_val}")
+                                            obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                                        else:
+                                            obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 
                                 print(f"SAVED {table} {obj_id}: Created={created}")
                                 synced_ids[table].append(obj_id)
@@ -587,6 +617,8 @@ class PushEndpoint(APIView):
             'cheques': Cheque,
             'categories': Category,
             'user_permissions': UserPermission,
+            'online_orders': OnlineOrder,
+            'online_order_items': OnlineOrderItem,
         }
 
         return model_mapping.get(table_name)
@@ -642,6 +674,8 @@ class PullEndpoint(APIView):
                 'performance_reviews',
                 'shifts',
                 'user_permissions',
+                'online_orders',
+                'online_order_items',
             ]
 
             updates = {}
@@ -685,6 +719,8 @@ class PullEndpoint(APIView):
                 'cheques': Cheque,
                 'categories': Category,
                 'user_permissions': UserPermission,
+                'online_orders': OnlineOrder,
+                'online_order_items': OnlineOrderItem,
             }
 
 
