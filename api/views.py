@@ -631,8 +631,9 @@ class PullEndpoint(APIView):
             data = request.data
             store_id = data.get('store_id')
             last_sync = data.get('last_sync') # ISO timestamp string
-
-            if not store_id:
+            bootstrap = request.query_params.get('bootstrap') == 'true'
+            
+            if not store_id and not bootstrap:
                 return Response({"status": "error", "message": "store_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
              # Order for pulling usually doesn't matter as much, but we'll follow same order
@@ -769,7 +770,16 @@ class PullEndpoint(APIView):
                     else:
                         filter_field = 'updated_at'
                         
-                    queryset = queryset.filter(**{f"{filter_field}__gt": last_sync})
+                    # Check if the filter field exists in the model
+                    available_fields = [f.name for f in model._meta.fields]
+                    if filter_field in available_fields:
+                        queryset = queryset.filter(**{f"{filter_field}__gt": last_sync})
+                    elif 'created_at' in available_fields:
+                        # Fallback to created_at if updated_at is missing
+                        queryset = queryset.filter(created_at__gt=last_sync)
+                    else:
+                        # If no timestamp field exists, we can't filter by delta, so fetch all
+                        print(f"[SYNC] WARNING: Model {model.__name__} has no timestamp field to filter by {last_sync}")
                 
                 try:
                     rows = []
