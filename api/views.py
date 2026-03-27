@@ -147,7 +147,6 @@ def make_aware_if_naive(value):
     try:
         from django.utils.dateparse import parse_datetime
         from django.utils import timezone
-        from datetime import datetime
         
         # Try parse_datetime (ISO)
         dt = parse_datetime(value.strip())
@@ -406,6 +405,10 @@ class PushEndpoint(APIView):
                                                             placeholder_data[f.name] = False
                                                         elif f.get_internal_type() in ['IntegerField', 'FloatField', 'DecimalField']:
                                                             placeholder_data[f.name] = 0
+                                                        elif f.get_internal_type() == 'DateField':
+                                                            placeholder_data[f.name] = timezone.now().date()
+                                                        elif f.get_internal_type() == 'DateTimeField':
+                                                            placeholder_data[f.name] = timezone.now()
                                                 # Special extra fields for User
                                                 if target_model == User:
                                                     placeholder_data.update({
@@ -478,7 +481,6 @@ class PushEndpoint(APIView):
                                             month_val = cleaned_data.get('month')
                                             if isinstance(month_val, str) and '-' not in month_val:
                                                 try:
-                                                    from datetime import datetime
                                                     # Try common formats like "March 2026"
                                                     try:
                                                         parsed_date = datetime.strptime(month_val, '%B %Y')
