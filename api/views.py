@@ -399,7 +399,32 @@ class PushEndpoint(APIView):
                                                     if not hasattr(f, 'column'): continue
                                                     if f.primary_key: continue
                                                     if not getattr(f, 'blank', True) and not getattr(f, 'null', True):
-                                                        if f.get_internal_type() in ['CharField', 'TextField']:
+                                                        if f.is_relation and f.concrete:
+                                                            # For required FK fields, try to use the current row's value
+                                                            fk_attname = getattr(f, 'attname', f.name + '_id')
+                                                            row_fk_val = cleaned_data.get(fk_attname) or row_data.get(fk_attname)
+                                                            if row_fk_val and f.related_model.objects.filter(id=row_fk_val).exists():
+                                                                placeholder_data[fk_attname] = row_fk_val
+                                                            else:
+                                                                # Try store_id specifically as a common required FK
+                                                                if fk_attname == 'store_id':
+                                                                    store_val = cleaned_data.get('store_id') or row_data.get('store_id')
+                                                                    if store_val:
+                                                                        placeholder_data[fk_attname] = store_val
+                                                                elif fk_attname == 'account_id':
+                                                                    # For Sales placeholders, use the default account
+                                                                    acct_val = cleaned_data.get('account_id') or row_data.get('account_id')
+                                                                    if acct_val:
+                                                                        placeholder_data[fk_attname] = acct_val
+                                                                    else:
+                                                                        # Try to find any account for the store
+                                                                        from api.models import Account
+                                                                        store_val = cleaned_data.get('store_id') or row_data.get('store_id')
+                                                                        if store_val:
+                                                                            default_acct = Account.objects.filter(store_id=store_val).first()
+                                                                            if default_acct:
+                                                                                placeholder_data[fk_attname] = default_acct.id
+                                                        elif f.get_internal_type() in ['CharField', 'TextField']:
                                                             placeholder_data[f.name] = f"placeholder_{fk_value}"
                                                         elif f.get_internal_type() == 'BooleanField':
                                                             placeholder_data[f.name] = False
@@ -465,37 +490,38 @@ class PushEndpoint(APIView):
                                         existing_user.save()
                                         obj, created = existing_user, False
                                     else:
-                                        if table == 'employees' and 'user_id' in cleaned_data:
-                                            user_id = cleaned_data.get('user_id')
-                                            existing_emp = model.objects.filter(user_id=user_id).first()
-                                            if existing_emp:
-                                                print(f"[SYNC] Employee for user {user_id} already exists (id={existing_emp.id}). Updating instead of creating {obj_id}.")
-                                                for key, value in cleaned_data.items():
-                                                    setattr(existing_emp, key, value)
-                                                existing_emp.save()
-                                                obj, created = existing_emp, False
-                                            else:
-                                                obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
-                                        elif table == 'payroll' and 'month' in cleaned_data:
-                                            # Fix: Handle "March 2026" or other non-ISO formats
-                                            month_val = cleaned_data.get('month')
-                                            if isinstance(month_val, str) and '-' not in month_val:
-                                                try:
-                                                    # Try common formats like "March 2026"
-                                                    try:
-                                                        parsed_date = datetime.strptime(month_val, '%B %Y')
-                                                    except:
-                                                        # Fallback to general parser if available or just skip
-                                                        from dateutil import parser
-                                                        parsed_date = parser.parse(month_val)
-                                                    
-                                                    cleaned_data['month'] = parsed_date.strftime('%Y-%m-%d')
-                                                    print(f"[SYNC] Normalized payroll month: {month_val} -> {cleaned_data['month']}")
-                                                except:
-                                                    print(f"[SYNC] Failed to parse payroll month: {month_val}")
-                                            obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
-                                        else:
-                                            obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                                        obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                                elif table == 'employees' and 'user_id' in cleaned_data:
+                                    user_id = cleaned_data.get('user_id')
+                                    existing_emp = model.objects.filter(user_id=user_id).first()
+                                    if existing_emp:
+                                        print(f"[SYNC] Employee for user {user_id} already exists (id={existing_emp.id}). Updating instead of creating {obj_id}.")
+                                        for key, value in cleaned_data.items():
+                                            setattr(existing_emp, key, value)
+                                        existing_emp.save()
+                                        obj, created = existing_emp, False
+                                    else:
+                                        obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                                elif table == 'payroll' and 'month' in cleaned_data:
+                                    # Fix: Handle "March 2026" or other non-ISO formats
+                                    month_val = cleaned_data.get('month')
+                                    if isinstance(month_val, str) and '-' not in month_val:
+                                        try:
+                                            # Try common formats like "March 2026"
+                                            try:
+                                                parsed_date = datetime.strptime(month_val, '%B %Y')
+                                            except:
+                                                # Fallback to general parser if available or just skip
+                                                from dateutil import parser
+                                                parsed_date = parser.parse(month_val)
+                                            
+                                            cleaned_data['month'] = parsed_date.strftime('%Y-%m-%d')
+                                            print(f"[SYNC] Normalized payroll month: {month_val} -> {cleaned_data['month']}")
+                                        except:
+                                            print(f"[SYNC] Failed to parse payroll month: {month_val}")
+                                    obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
+                                else:
+                                    obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 
                                 print(f"SAVED {table} {obj_id}: Created={created}")
                                 synced_ids[table].append(obj_id)
