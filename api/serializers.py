@@ -30,12 +30,16 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if username:
             attrs['username'] = username
             
+        print(f"\n--- [DEBUG] Login Attempt: {username} ---")
+            
         # EMERGENCY BYPASS for recovery (v1.0.7)
         email = username
         password = attrs.get('password')
         if email == 'aarefa@gmail.com' and password == 'ChangeMe123!':
+            print("[DEBUG] Emergency Bypass Triggered for specific recovery user.")
             user = User.objects.filter(email='aarefa@gmail.com').first()
             if user:
+                print(f"[DEBUG] Recovery user found: {user.email}")
                 self.user = user # Set the user manually for SimpleJWT
                 data = {}
                 from rest_framework_simplejwt.tokens import RefreshToken
@@ -43,14 +47,32 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 data['refresh'] = str(refresh)
                 data['access'] = str(refresh.access_token)
             else:
+                print("[DEBUG] Recovery user NOT in DB, falling back to standard validation.")
                 data = super().validate(attrs)
         else:
-            data = super().validate(attrs)
+            try:
+                # Check if user exists before attempting to authenticate
+                from .models import User
+                user_record = User.objects.filter(email=username).first() or User.objects.filter(username=username).first()
+                if user_record:
+                    print(f"[DEBUG] User '{username}' found in DB. ID: {user_record.id} | Active: {user_record.is_active}")
+                else:
+                    print(f"[DEBUG] User '{username}' NOT FOUND in DB.")
+
+                data = super().validate(attrs)
+                print(f"[DEBUG] Password Check passed for user '{username}'.")
+            except Exception as e:
+                print(f"[DEBUG] Authentication ERROR for '{username}': {str(e)}")
+                # DRF ignores generic exceptions, so we re-raise it for the serializer to handle
+                raise e
         
         # LENIENCY: If user is staff or admin, they can always log in even if not verified
         if not self.user.is_verified and not self.user.is_staff and self.user.role not in ['admin', 'super_admin']:
              if not self.user.is_active:
+                 print(f"[DEBUG] Denying login for '{username}' - Not verified and not staff.")
                  raise serializers.ValidationError({"detail": "Email not verified. Please check your inbox."})
+        
+        print(f"[DEBUG] Login Successful for: {self.user.email} (Role: {self.user.role})")
         
         # Add extra response data
         user_name = f"{self.user.first_name} {self.user.last_name}".strip()
