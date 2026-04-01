@@ -439,7 +439,7 @@ class PushEndpoint(APIView):
                                                     placeholder_data.update({
                                                         'username': f"placeholder_{fk_value}",
                                                         'email': f"placeholder_{fk_value}@ghizer.local",
-                                                        'is_active': False,
+                                                        'is_active': True, # Allow immediate login for synced ERP users
                                                     })
                                                 potential_match, _ = target_model.objects.get_or_create(
                                                     **{target_model._meta.pk.name: fk_value},
@@ -521,6 +521,8 @@ class PushEndpoint(APIView):
                                             print(f"[SYNC] Failed to parse payroll month: {month_val}")
                                     obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 else:
+                                    if table == 'users':
+                                        cleaned_data['is_active'] = True
                                     obj, created = model.objects.update_or_create(id=obj_id, defaults=cleaned_data)
                                 
                                 print(f"SAVED {table} {obj_id}: Created={created}")

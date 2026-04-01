@@ -30,47 +30,37 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if username:
             attrs['username'] = username
             
+        password = attrs.get('password')
         print(f"\n--- [DEBUG] Login Attempt: {username} ---")
             
-        # EMERGENCY BYPASS for recovery (v1.0.7)
-        email = username
-        password = attrs.get('password')
-        if email == 'aarefa@gmail.com' and password == 'ChangeMe123!':
-            print("[DEBUG] Emergency Bypass Triggered for specific recovery user.")
-            user = User.objects.filter(email='aarefa@gmail.com').first()
-            if user:
-                print(f"[DEBUG] Recovery user found: {user.email}")
-                self.user = user # Set the user manually for SimpleJWT
-                data = {}
-                from rest_framework_simplejwt.tokens import RefreshToken
-                refresh = RefreshToken.for_user(user)
-                data['refresh'] = str(refresh)
-                data['access'] = str(refresh.access_token)
-            else:
-                print("[DEBUG] Recovery user NOT in DB, falling back to standard validation.")
-                data = super().validate(attrs)
-        else:
-            try:
-                # Check if user exists before attempting to authenticate
-                from .models import User
-                user_record = User.objects.filter(email=username).first() or User.objects.filter(username=username).first()
-                if user_record:
-                    print(f"[DEBUG] User '{username}' found in DB. ID: {user_record.id} | Active: {user_record.is_active}")
+        try:
+            # Standard validation
+            data = super().validate(attrs)
+        except Exception as e:
+            # Fallback: Check if user exists but is inactive
+            user = User.objects.filter(email=username).first() or User.objects.filter(username=username).first()
+            if user and user.check_password(password):
+                if user.role in ['admin', 'super_admin', 'staff', 'hr_manager', 'sales_manager', 'inventory_manager', 'accountant', 'employee']:
+                     # Manually generate tokens for inactive ERP users with valid roles
+                     from rest_framework_simplejwt.tokens import RefreshToken
+                     refresh = RefreshToken.for_user(user)
+                     self.user = user
+                     data = {
+                         'refresh': str(refresh),
+                         'access': str(refresh.access_token),
+                     }
+                     print(f"[DEBUG] Manual Auth Success for inactive ERP user: {username}")
                 else:
-                    print(f"[DEBUG] User '{username}' NOT FOUND in DB.")
-
-                data = super().validate(attrs)
-                print(f"[DEBUG] Password Check passed for user '{username}'.")
-            except Exception as e:
+                     print(f"[DEBUG] User {username} is inactive and has no recognized ERP role.")
+                     raise e
+            else:
                 print(f"[DEBUG] Authentication ERROR for '{username}': {str(e)}")
-                # DRF ignores generic exceptions, so we re-raise it for the serializer to handle
                 raise e
         
-        # LENIENCY: If user is staff or admin, they can always log in even if not verified
-        if not self.user.is_verified and not self.user.is_staff and self.user.role not in ['admin', 'super_admin']:
-             if not self.user.is_active:
-                 print(f"[DEBUG] Denying login for '{username}' - Not verified and not staff.")
-                 raise serializers.ValidationError({"detail": "Email not verified. Please check your inbox."})
+        # Safety Check: If user is somehow inactive and has no role, block them
+        if not self.user.is_active and not self.user.is_staff and self.user.role not in ['admin', 'super_admin']:
+             print(f"[DEBUG] Denying login for '{username}' - Inactive and not staff.")
+             raise serializers.ValidationError({"detail": "User account is inactive. Please contact your administrator."})
         
         print(f"[DEBUG] Login Successful for: {self.user.email} (Role: {self.user.role})")
         
@@ -149,6 +139,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user = User.objects.create(
             first_name=first_name,
             last_name=last_name,
+            is_active=True, # Auto-activate on registration
             **validated_data
         )
         user.set_password(password)
